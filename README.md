@@ -167,6 +167,17 @@ bill quota), then translate as usual. Every result is cached against
 pixels + engine + model + target language, so re-reading a page is always
 free. The free Lens engine stays the default; Lara is strictly opt-in.
 
+### The free route: Lens OCR + Lara's text API
+
+The image API bills a flat 10,000 characters per picture — one page a month on
+the free tier. The **`lens-lara`** engine is the cheap alternative: anonymous
+Lens crupload still finds the boxes and detects the language (identical to the
+free engine), and only the *text* goes to Lara's `POST /v2/translate`, batched
+into one call per page. Lara bills real characters there — a manga page is
+usually 500–1,500 chars — so the free tier's 10k/month covers roughly 10–20
+pages, and Pro's 500k covers hundreds. Same credentials, same cache discipline,
+same locally-painted output as the Lens engine.
+
 ## Loading it in Firefox
 
 Node is **not** required — there is no build step. All scripts are classic,

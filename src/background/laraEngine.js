@@ -341,6 +341,90 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     };
   }
 
+  // ── text translation (the cheap route: pairs with any OCR that gives boxes) ─
+
+  /**
+   * Translate an array of strings in ONE /v2/translate call.
+   *
+   * Lara bills the image API a flat 10,000 characters per picture, but TEXT
+   * translation is billed by the actual characters sent - a manga page of
+   * speech bubbles is usually 500-1,500 characters. This is what makes the
+   * free tier (10k chars/month) genuinely usable, via the 'lens-lara' engine.
+   *
+   * The endpoint is a NDJSON stream of partial TextResults; the official SDK
+   * keeps the last chunk and so do we. `translation` mirrors the input type,
+   * so an array input comes back as an array.
+   */
+  async function translateTexts(texts, sourceLang, targetLang, settings) {
+    if (!Array.isArray(texts) || !texts.length) return [];
+    requireCredentials(settings);
+    if (tokenIsExpired(token)) await ensureToken(settings);
+
+    const body = { q: texts, target: String(targetLang || 'en') };
+    if (sourceLang && sourceLang !== 'auto') body.source = sourceLang;
+
+    const call = (bearer) => fetch(API_BASE + '/translate', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + bearer,
+        'X-Lara-Date': new Date().toUTCString(),
+        'X-No-Trace': 'true',
+        'X-Lara-SDK-Name': 'comictranslate-extension',
+        'X-Lara-SDK-Version': '0.1.0',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    let res = await call(token);
+    if (res.status === 401) {
+      log(settings, 'token rejected; re-authenticating');
+      token = null;
+      await ensureToken(settings);
+      res = await call(token);
+    }
+
+    if (!res.ok) {
+      let detail = 'HTTP ' + res.status;
+      try {
+        const data = await res.json();
+        if (data && data.message) detail += ': ' + data.message;
+      } catch { /* empty error body */ }
+      const quota = res.status === 402 || res.status === 429;
+      throw new Error('Lara text translation failed (' + detail + ')' +
+        (quota ? '. On the free tier the API cap is 10,000 characters per month.' : ''));
+    }
+
+    const raw = await res.text();
+    let last = null;
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const chunk = JSON.parse(trimmed);
+        if (chunk && 'translation' in chunk) last = chunk;
+      } catch { /* a partial line is not a complete JSON object yet */ }
+    }
+    if (!last) {
+      // Small replies may arrive as one plain JSON object, not a stream.
+      try {
+        const one = JSON.parse(raw);
+        if (one && 'translation' in one) last = one;
+      } catch { /* fall through to the error below */ }
+    }
+    if (!last) throw new Error('Lara text translation returned an unparseable response');
+
+    log(settings, 'text batch:', texts.length, 'lines,',
+        texts.join('').length, 'chars billed');
+    const tr = last.translation;
+    if (Array.isArray(tr)) return texts.map((_, i) => String(tr[i] || ''));
+    // Scalar reply for a batch should not happen (T mirrors the input type);
+    // if it ever does, align to index 0 and leave the rest untranslated.
+    if (texts.length === 1) return [String(tr || '')];
+    log(settings, 'unexpected scalar translation for a batch');
+    return texts.map((_, i) => (i === 0 ? String(tr || '') : ''));
+  }
+
   // The secret never appears in logs or diagnostics; the key id alone is safe.
   globalThis.CTLaraEngine = {
     id: 'lara',
@@ -357,6 +441,7 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     ensureToken,
     imageFormFields,
     extFromMime,
+    translateTexts,
     resetAuth,
     log,
     imageToRegions

@@ -15,7 +15,7 @@ if (typeof importScripts === 'function') {
   try {
     importScripts('settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
                   'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
-                  'engines.js');
+                  'lensLaraEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }

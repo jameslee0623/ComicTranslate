@@ -270,6 +270,76 @@ async function main() {
   check('imageToRegions: surfaces the server message and the cost warning',
         !!threw2 && /quota exceeded/.test(threw2.message) && /10,000/.test(threw2.message));
 
+  // ── text translation (the free-tier route) ────────────────────────────────
+  CTLaraEngine.resetAuth();
+  fetchCalls.length = 0;
+  // NDJSON stream: two chunks, the last one is the final result (SDK parity).
+  fetchQueue = [
+    function () { return jsonReply(200, { token: makeJwt(4102444800) }, {}); },
+    function () {
+      return {
+        ok: true, status: 200,
+        headers: { get: function () { return 'application/json'; } },
+        text: function () {
+          return Promise.resolve(
+            '{"translation":["hola","mundo"],"sourceLanguage":"en"}\n' +
+            '{"translation":["hola","mundo"],"sourceLanguage":"en"}\n');
+        }
+      };
+    }
+  ];
+  var out2 = await CTLaraEngine.translateTexts(['hello', 'world'], 'auto', 'es', settings);
+  eq('translateTexts: aligns the batch reply', out2.join('|'), 'hola|mundo');
+  eq('translateTexts: two calls (auth + translate)', fetchCalls.length, 2);
+  eq('translateTexts: hits /v2/translate',
+     fetchCalls[1].url, 'https://api.laratranslate.com/v2/translate');
+  var tb = JSON.parse(fetchCalls[1].opts.body);
+  check('translateTexts: batch rides under q',
+        Array.isArray(tb.q) && tb.q[0] === 'hello' && tb.q[1] === 'world');
+  eq('translateTexts: target field', tb.target, 'es');
+  check('translateTexts: auto source omitted', !('source' in tb));
+  check('translateTexts: no-trace header', fetchCalls[1].opts.headers['X-No-Trace'] === 'true');
+
+  // Concrete source passes through; a scalar reply wraps for single input.
+  fetchCalls.length = 0;
+  fetchQueue = [
+    function () {
+      return {
+        ok: true, status: 200,
+        headers: { get: function () { return 'application/json'; } },
+        text: function () { return Promise.resolve('{"translation":"hola"}\n'); }
+      };
+    }
+  ];
+  var out3 = await CTLaraEngine.translateTexts(['hello'], 'en', 'es', settings);
+  eq('translateTexts: scalar reply wraps for single input', out3.join('|'), 'hola');
+  tb = JSON.parse(fetchCalls[0].opts.body);
+  eq('translateTexts: concrete source kept', tb.source, 'en');
+
+  // Empty input never reaches the network.
+  fetchCalls.length = 0;
+  var out4 = await CTLaraEngine.translateTexts([], 'auto', 'es', settings);
+  eq('translateTexts: empty input -> empty output, zero fetches',
+     out4.length + '/' + fetchCalls.length, '0/0');
+
+  // Quota errors carry the free-tier hint.
+  CTLaraEngine.resetAuth();
+  fetchCalls.length = 0;
+  fetchQueue = [
+    function () { return jsonReply(200, { token: makeJwt(4102444800) }, {}); },
+    function () {
+      return {
+        ok: false, status: 402,
+        headers: { get: function () { return 'application/json'; } },
+        json: function () { return Promise.resolve({ message: 'quota exceeded' }); }
+      };
+    }
+  ];
+  var threw3 = null;
+  try { await CTLaraEngine.translateTexts(['hi'], 'en', 'es', settings); } catch (e) { threw3 = e; }
+  check('translateTexts: quota error carries the free-tier hint',
+        !!threw3 && /quota exceeded/.test(threw3.message) && /10,000/.test(threw3.message));
+
   print('');
   if (failed) {
     print('lara: ' + failed + ' FAILURE(S) (' + passed + ' passed)');

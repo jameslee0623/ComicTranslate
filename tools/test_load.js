@@ -75,7 +75,7 @@ globalThis.browser = {
 
 var BACKGROUND = ['settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
                   'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
-                  'engines.js', 'background.js'];
+                  'lensLaraEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -119,6 +119,7 @@ var EXPECTED = {
   CTLensProto: ['scan', 'buildRequest', 'parseResponse', 'regionsFromText',
                 'rescaleRegions', 'boxToPixels', 'collectWordsDeep'],
   CTLensEngine: ['imageToRegions', 'toUploadable', 'log'],
+  CTLensLaraEngine: ['imageToRegions', 'log'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'imageToRegions'],
   CTTranslator: ['parseReply', 'planBatches', 'translateStrings', 'translateRegions'],

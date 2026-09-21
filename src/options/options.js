@@ -63,10 +63,14 @@ function fillEngines(engines, selected) {
   el('engine-note').textContent = current
     ? (current.id === 'lara'
         ? 'Paid API. Enter your credentials below, then use "Test Lara credentials".'
-        : current.needsKey
-          ? 'This engine needs an API key before it will work.'
-          : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
-            'without notice.')
+        : current.id === 'lens-lara'
+          ? 'Free anonymous Lens OCR finds the boxes; only the text goes to Lara, ' +
+            'billed by real characters — the free tier (10,000 chars/month) covers ' +
+            'roughly 10–20 manga pages. Same Lara credentials below.'
+          : current.needsKey
+            ? 'This engine needs an API key before it will work.'
+            : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
+              'without notice.')
     : '';
   el('lara-fields').hidden = !(current && current.id === 'lara');
 }
@@ -176,7 +180,7 @@ el('list-candidates').addEventListener('click', async () => {
 
 el('run-diagnostic').addEventListener('click', async () => {
   out.textContent = 'Running the full engine on one image… this uploads the ' +
-    'image to the configured engine (Google Lens, or Lara — a paid API).';
+    'image to the configured engine\u2019s services (Google Lens and/or Lara).';
   const started = Date.now();
   try {
     const data = await bg('CT_LENS_DIAGNOSE', { index: Number(el('diagIndex').value) || 0 });
