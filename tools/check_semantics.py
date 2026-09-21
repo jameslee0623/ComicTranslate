@@ -38,10 +38,12 @@ for r in refs:
         else:
             fail("manifest references missing path: " + r)
 
-# 2. HTML asset references must exist
+# 2. HTML asset references must exist (external http(s) links are not assets)
 for html in ["src/popup/popup.html", "src/options/options.html"]:
     base = os.path.dirname(html)
     for attr in re.findall(r'(?:src|href)="([^"]+)"', open(html).read()):
+        if attr.startswith("http://") or attr.startswith("https://"):
+            continue  # external URL, not a bundled asset
         p = os.path.normpath(os.path.join(base, attr))
         if not os.path.exists(p):
             fail(f"{html} references missing asset: {attr}")

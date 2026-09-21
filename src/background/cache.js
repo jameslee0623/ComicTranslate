@@ -11,8 +11,8 @@ if (typeof globalThis.CTCache === 'undefined') {
   const DB_NAME = 'comictranslate';
   const DB_VERSION = 1;
   const STORE = 'translations';
-  const SCHEMA_VERSION = 2; // bump to invalidate every cached entry (v2: old
-                            // engine cached garbage regions from a dead flow)
+  const SCHEMA_VERSION = 3; // v3: keys now fold in the engine variant (Lara's
+                            // text-removal model), invalidating every v2 entry
 
   let dbPromise = null;
 
@@ -63,9 +63,10 @@ if (typeof globalThis.CTCache === 'undefined') {
       .join('');
   }
 
-  async function makeKey({ bytes, engineId, sourceLang, targetLang }) {
+  async function makeKey({ bytes, engineId, variant, sourceLang, targetLang }) {
     const pixelHash = bytes ? await hashBytes(bytes) : 'nobytes';
-    return hashKey([SCHEMA_VERSION, engineId, sourceLang, targetLang, pixelHash]);
+    return hashKey([SCHEMA_VERSION, engineId, variant || '',
+                    sourceLang, targetLang, pixelHash]);
   }
 
   async function get(key, ttlDays) {

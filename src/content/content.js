@@ -98,6 +98,19 @@
       needBytes: tainted
     });
 
+    // Full-image engines (Lara) return a server-rendered translation: no
+    // local painting at all, just put the bitmap into the page.
+    if (result.image && result.image.bytes) {
+      const applied = await CTReplace.applyImageBytes(
+        el, result.image.bytes, result.image.mime,
+        settings.renderMode === 'overlay' ? 'overlay' : 'replace'
+      );
+      log('applied image', applied);
+      if (!applied.ok) throw new Error(applied.reason || 'apply failed');
+      stats.translated++;
+      return { ok: true, mode: applied.mode };
+    }
+
     if (!result.regions || !result.regions.length) {
       stats.skipped++;
       log('no regions for', candidate.url.slice(0, 120), result.diagnostics);
@@ -269,6 +282,7 @@
       previous.targetLang !== next.targetLang ||
       previous.sourceLang !== next.sourceLang ||
       previous.engineId !== next.engineId ||
+      previous.laraModel !== next.laraModel ||
       previous.renderMode !== next.renderMode
     );
     if (stale) {

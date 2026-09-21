@@ -10,7 +10,8 @@
 const FIELDS = [
   'sourceLang', 'targetLang', 'engineId', 'renderMode', 'fontFamily',
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
-  'cacheTtlDays', 'domainMode'
+  'cacheTtlDays', 'domainMode',
+  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -60,11 +61,14 @@ function fillEngines(engines, selected) {
   sel.value = selected;
   const current = engines.find((e) => e.id === selected);
   el('engine-note').textContent = current
-    ? (current.needsKey
-        ? 'This engine needs an API key before it will work.'
-        : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
-          'without notice.')
+    ? (current.id === 'lara'
+        ? 'Paid API. Enter your credentials below, then use "Test Lara credentials".'
+        : current.needsKey
+          ? 'This engine needs an API key before it will work.'
+          : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
+            'without notice.')
     : '';
+  el('lara-fields').hidden = !(current && current.id === 'lara');
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */
@@ -101,6 +105,9 @@ async function load() {
   el('cacheTtlDays').value = s.cacheTtlDays;
   el('domainMode').value = s.domainMode;
   el('domains').value = (s.domains || []).join('\n');
+  el('laraAccessKeyId').value = s.laraAccessKeyId || '';
+  el('laraAccessKeySecret').value = s.laraAccessKeySecret || '';
+  el('laraModel').value = s.laraModel || 'inpainting';
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
 }
 
@@ -131,6 +138,23 @@ el('clear-cache').addEventListener('click', async () => {
   out.textContent = 'Cache cleared.';
 });
 
+el('lara-probe').addEventListener('click', async () => {
+  const note = el('lara-probe-result');
+  note.textContent = 'Checking…';
+  try {
+    // Save first: the probe authenticates with whatever is in the fields now.
+    await save({
+      laraAccessKeyId: el('laraAccessKeyId').value.trim(),
+      laraAccessKeySecret: el('laraAccessKeySecret').value.trim()
+    });
+    const data = await bg('CT_LARA_PROBE');
+    const when = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'unknown';
+    note.textContent = 'Credentials accepted. Token expires ' + when + '.';
+  } catch (e) {
+    note.textContent = 'Failed: ' + e.message;
+  }
+});
+
 el('list-candidates').addEventListener('click', async () => {
   out.textContent = 'Looking for images on your most recently used web page...';
   try {
@@ -151,7 +175,8 @@ el('list-candidates').addEventListener('click', async () => {
 });
 
 el('run-diagnostic').addEventListener('click', async () => {
-  out.textContent = 'Running the full engine on one image... this uploads the image to Google.';
+  out.textContent = 'Running the full engine on one image… this uploads the ' +
+    'image to the configured engine (Google Lens, or Lara — a paid API).';
   const started = Date.now();
   try {
     const data = await bg('CT_LENS_DIAGNOSE', { index: Number(el('diagIndex').value) || 0 });
@@ -169,9 +194,12 @@ el('run-diagnostic').addEventListener('click', async () => {
       `took ${seconds}s`,
       `tab: ${data.tabUrl}`,
       `target: ${data.target.width}x${data.target.height} ${data.target.url}`,
-      `regions: ${(result.regions || []).length}`,
       `engineId: ${result.engineId}`,
       `via: ${result.via}`,
+      `cached: ${result.cached}`,
+      result.image
+        ? `image: ${result.image.bytesLen} bytes, ${result.image.mime}`
+        : `regions: ${(result.regions || []).length}`,
       'diagnostics:',
       JSON.stringify(result.diagnostics || null, null, 2)
     ].join('\n');
@@ -181,7 +209,8 @@ el('run-diagnostic').addEventListener('click', async () => {
       `text=${JSON.stringify(r.text)} translated=${JSON.stringify(r.translated)}`
     ).join('\n');
 
-    out.textContent = summary + '\n\n--- regions ---\n' + (regions || '(none)');
+    out.textContent = summary +
+      (result.image ? '' : '\n\n--- regions ---\n' + (regions || '(none)'));
   } catch (e) {
     out.textContent = 'Diagnostic failed: ' + e.message;
   }

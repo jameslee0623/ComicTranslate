@@ -21,6 +21,7 @@
       "src/background/protobuf.js",
       "src/background/lensProto.js",
       "src/background/lensEngine.js",
+      "src/background/laraEngine.js",
       "src/background/engines.js",
       "src/background/background.js"
     ]

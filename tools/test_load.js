@@ -74,8 +74,8 @@ globalThis.browser = {
 };
 
 var BACKGROUND = ['settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
-                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'engines.js',
-                  'background.js'];
+                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
+                  'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -119,14 +119,16 @@ var EXPECTED = {
   CTLensProto: ['scan', 'buildRequest', 'parseResponse', 'regionsFromText',
                 'rescaleRegions', 'boxToPixels', 'collectWordsDeep'],
   CTLensEngine: ['imageToRegions', 'toUploadable', 'log'],
+  CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
+                 'ensureToken', 'imageFormFields', 'extFromMime', 'imageToRegions'],
   CTTranslator: ['parseReply', 'planBatches', 'translateStrings', 'translateRegions'],
   CTTextLayout: ['isRtl', 'tokenize', 'wrapTokens', 'fitText', 'drawText', 'setFont'],
   CTPainter: ['luminance', 'dominantColor', 'sampleRingColor', 'expandBox', 'fillBox',
               'renderRegions'],
   CTImageScanner: ['scan', 'isEligibleUrl', 'markSeen', 'hasSeen', 'reset',
                    'imgCandidate', 'backgroundCandidate'],
-  CTReplace: ['apply', 'restoreElement', 'restoreAll', 'mountOverlay', 'unmountOverlay',
-              'canvasToBlobUrl', 'count']
+  CTReplace: ['apply', 'applyImageBytes', 'restoreElement', 'restoreAll', 'mountOverlay',
+              'unmountOverlay', 'canvasToBlobUrl', 'count']
 };
 
 print('');

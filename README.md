@@ -61,7 +61,7 @@ CSS backgrounds     content fallback  text translate     inpaint + typeset    CS
 ```
 
 **Background** (Firefox MV3 runs an *event page*, not a service worker):
-`settings.js` · `cache.js` · `imageFetch.js` · `translator.js` · `protobuf.js` · `lensProto.js` · `lensEngine.js` · `engines.js` · `background.js`
+`settings.js` · `cache.js` · `imageFetch.js` · `translator.js` · `protobuf.js` · `lensProto.js` · `lensEngine.js` · `laraEngine.js` · `engines.js` · `background.js`
 
 **Content scripts** (ordered, classic scripts):
 `textLayout.js` · `painter.js` · `imageScanner.js` · `replaceImage.js` · `content.js`
@@ -124,6 +124,49 @@ Adding Google Cloud Vision plus Cloud Translation is **one new file** and one
 registry line in `engines.js`. That was the point of the abstraction: the free
 path is fragile, and the paid path is the reliable escape hatch.
 
+## Lara Translate engine (official, paid)
+
+`laraEngine.js` adds a second engine that replaces the whole undocumented Lens
+chain with **one official API call**:
+
+```
+POST https://api.laratranslate.com/v2/images/translate
+  multipart: image, source, target, model   ->   binary translated image
+```
+
+The server does OCR, text removal, background reconstruction and typesetting;
+the extension receives a finished bitmap and puts it into the page with the
+same blob-src → CSP-proof-overlay fallback the Lens path uses. No local OCR,
+painting or font handling is involved — and no undocumented endpoint either.
+
+Auth mirrors the official browser SDK exactly (translated/lara-node,
+`src/crypto/browser-crypto.ts`): `POST /v2/auth` with
+
+```
+Authorization: Lara:<base64(HMAC-SHA256(challenge, secret))>
+challenge     = method ⏎ path ⏎ Content-MD5 ⏎ Content-Type ⏎ X-Lara-Date
+Content-MD5   = base64(SHA-256(body) truncated to 16 bytes)   ← the name lies
+```
+
+The returned JWT is reused until 5 s before expiry, refreshed via
+`/v2/auth/refresh` (single-use rotated tokens), and every image call sends
+`X-No-Trace: true` — per Lara's docs the content is never stored or trained on.
+
+| | |
+|---|---|
+| **Cost** | 10,000 characters per image: ≈ 1 page/month on the free tier (API capped at 10k chars/mo), ≈ 50 pages/month on Pro ($9.99), ≈ $0.25/page when metered |
+| **Models** | `inpainting` (default — removes text, rebuilds the background) · `overlay` (cheapest, text drawn over the original) · `generative` / `generative_fast` (redraws the page) |
+| **Formats** | PNG · JPEG · **WebP** · AVIF · GIF · BMP · TIFF |
+| **Languages** | full locale codes; omitting `source` enables auto-detection |
+
+Setup: Settings → Engine → *Lara Translate*, paste the Access Key ID and
+Secret from
+[app.laratranslate.com/account/credentials](https://app.laratranslate.com/account/credentials),
+press **Test Lara credentials** (a free `/v2/auth` call — a test *image* would
+bill quota), then translate as usual. Every result is cached against
+pixels + engine + model + target language, so re-reading a page is always
+free. The free Lens engine stays the default; Lara is strictly opt-in.
+
 ## Loading it in Firefox
 
 Node is **not** required — there is no build step. All scripts are classic,
@@ -148,7 +191,7 @@ Turn on `debug` in the options page, then watch the **Browser Console**
 ./tools/verify.sh
 ```
 
-Three stages, all runnable without Node or a browser:
+Five stages, all runnable without Node or a browser:
 
 1. **Syntax** — every JS file is parsed with JavaScriptCore (`jsc`).
 2. **Load** — every module is actually *evaluated* against stubbed browser
@@ -156,7 +199,10 @@ Three stages, all runnable without Node or a browser:
 3. **Functional** — 26 assertions over the pure content logic: script
    tokenisation, line wrapping, hard-breaking of overlong words, font-size
    fitting, luminance and bubble-colour sampling, box clamping.
-4. **Semantic** — manifest paths exist, every element id the UI scripts touch
+4. **Lara** — unit tests over the engine's string plumbing with stubbed
+   WebCrypto/fetch: the HMAC challenge vector, the truncated `Content-MD5`
+   digest, token expiry maths, multipart assembly and the 401 re-auth path.
+5. **Semantic** — manifest paths exist, every element id the UI scripts touch
    exists in the HTML, every settings key the UI writes exists in `DEFAULTS`,
    and every `CT*` method called cross-module is actually exported.
 
@@ -181,7 +227,8 @@ and reported `"no content-script reply from result tab"`.
 | Semantic | passed — it had a `continue` for namespaces it could not enumerate statically |
 
 Three of four checks missed it. The lesson is that static analysis needs a
-counterpart that actually *runs* the module's top level.
+counterpart that actually *runs* the module's top level. (The list above is now
+five stages — stage 4 covers the Lara engine.)
 
 `verify.sh` proves the code is self-consistent. It does **not** prove the
 extension works in Firefox, and it cannot test the Lens parser — only the

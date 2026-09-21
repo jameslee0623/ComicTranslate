@@ -14,7 +14,8 @@
 if (typeof importScripts === 'function') {
   try {
     importScripts('settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
-                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'engines.js');
+                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
+                  'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -191,10 +192,22 @@ async function handle(msg, sender) {
         })
       );
 
+      // The options page never needs megabytes of image data: report size+mime.
+      if (result.image && result.image.bytes) {
+        result.image = { mime: result.image.mime, bytesLen: result.image.bytes.byteLength };
+      }
       if (result.diagnostics && result.diagnostics.dump) {
         result.diagnostics.dump = cap(result.diagnostics.dump, 20000);
       }
       return { target, candidates, result, tabUrl: tab.url };
+    }
+
+    case 'CT_LARA_PROBE': {
+      // Free credential check: /v2/auth only, never an image (an image bills
+      // ~10,000 characters). Reports the fresh token's actual expiry.
+      CTLaraEngine.resetAuth();
+      const bearer = await CTLaraEngine.ensureToken(settings);
+      return { ok: true, expiresAt: CTLaraEngine.tokenExpiry(bearer) || 0 };
     }
 
     default:

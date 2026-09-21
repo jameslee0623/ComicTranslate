@@ -51,6 +51,16 @@ if (typeof globalThis.CTSettings === 'undefined') {
     /** 0 disables caching. */
     cacheTtlDays: 30,
 
+    /**
+     * Lara Translate credentials (https://laratranslate.com). Stored locally in
+     * browser.storage; requests are signed in the background page and sent
+     * directly to api.laratranslate.com. Empty = Lara engine unavailable.
+     */
+    laraAccessKeyId: '',
+    laraAccessKeySecret: '',
+    /** Text-removal model: overlay | inpainting | generative | generative_fast. */
+    laraModel: 'inpainting',
+
     /** Diagnostic logging in the background console. */
     debug: true
   });

@@ -18,6 +18,11 @@
  *             sourceLang, targetLang, diagnostics }
  *   }
  *
+ * Full-image engines (Lara) return an extra `image: {bytes, mime}` with no
+ * useful regions: a server-rendered translation. translateImage() routes that
+ * to CTReplace.applyImageBytes instead of the painter and caches it keyed on
+ * the engine's variantKey() (for Lara: the text-removal model).
+ *
  * Swapping engines therefore touches this file plus one new provider file.
  * No other module imports a provider directly.
  */
@@ -92,6 +97,9 @@ if (typeof globalThis.CTEngines === 'undefined') {
     const cacheKey = await CTCache.makeKey({
       bytes: fetched.bytes,
       engineId: engine.id,
+      // Engine-specific dimension of the request (Lara's text-removal model):
+      // switching it must not serve entries produced with another one.
+      variant: engine.variantKey ? engine.variantKey(settings) : '',
       sourceLang: req.sourceLang,
       targetLang: req.targetLang
     });
@@ -101,7 +109,7 @@ if (typeof globalThis.CTEngines === 'undefined') {
       : null;
     if (cached) {
       const hit = Object.assign({}, cached, { cached: true, via: fetched.via });
-      if (req.needBytes) {
+      if (req.needBytes && !hit.image) {
         hit.bytes = fetched.bytes;
         hit.mime = fetched.mime;
       }
@@ -127,23 +135,32 @@ if (typeof globalThis.CTEngines === 'undefined') {
       engineId: engine.id
     };
 
-    if (payload.regions.length && settings.cacheTtlDays > 0) {
+    // Full-image engines (Lara) return a server-rendered bitmap instead of
+    // regions; it is cached like any other result, so repeat views stay free.
+    if (result.image && result.image.bytes) {
+      payload.image = { bytes: result.image.bytes, mime: result.image.mime || 'image/png' };
+    }
+
+    if ((payload.image || payload.regions.length) && settings.cacheTtlDays > 0) {
       await CTCache.put(cacheKey, payload);
     }
 
-    const response = Object.assign(payload, {
+    const response = Object.assign({}, payload, {
       cached: false,
       via: fetched.via,
       mime: fetched.mime,
       diagnostics: result.diagnostics || null
     });
     // Only shipped when the page's canvas would be tainted and the content
-    // script therefore cannot read pixels from its own <img> element.
-    if (req.needBytes) response.bytes = fetched.bytes;
+    // script therefore cannot read pixels from its own <img> element. A
+    // full-image result already carries everything the page needs, so the
+    // original bytes would just double the message size.
+    if (!payload.image && req.needBytes) response.bytes = fetched.bytes;
     return response;
   }
 
   register(CTLensEngine);
+  register(CTLaraEngine);
 
   globalThis.CTEngines = { register, get, list, translateImage, normaliseRegion };
 }

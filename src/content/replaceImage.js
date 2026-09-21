@@ -31,6 +31,69 @@ if (typeof globalThis.CTReplace === 'undefined') {
     });
   }
 
+  /** Decode an image URL and draw it onto a canvas (used for overlay fallbacks). */
+  async function urlToCanvas(url) {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('translated image failed to decode'));
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    return canvas;
+  }
+
+  /**
+   * Apply a fully translated bitmap (Lara engine) instead of a locally painted
+   * canvas. Same two strategies and the same fallback logic as apply():
+   * blob-src swap first, canvas overlay if the page's CSP refuses the blob.
+   */
+  async function applyImageBytes(el, bytes, mime, preferred) {
+    const isImg = el.tagName === 'IMG';
+    const kind = isImg ? 'img' : 'background';
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime || 'image/png' }));
+
+    if (preferred === 'overlay' || !isImg) {
+      try {
+        const canvas = await urlToCanvas(url);
+        URL.revokeObjectURL(url);
+        return attachOverlay(el, canvas, kind);
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        return { mode: 'overlay', ok: false, reason: e.message };
+      }
+    }
+
+    try {
+      swapSrc(el, url);
+      if (await waitForDecode(el, 5000)) {
+        remember(el, { kind, translated: true, blobUrl: url });
+        return { mode: 'replace', ok: true };
+      }
+      // Decoded to nothing: most likely the page's img-src policy refused the
+      // blob URL. Roll back and use the CSP-immune canvas overlay instead.
+      URL.revokeObjectURL(url);
+      const canvas = await urlToCanvas(url);
+      URL.revokeObjectURL(url);
+      const result = attachOverlay(el, canvas, kind);
+      return Object.assign(result, { reason: 'csp blocked blob URL' });
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      // swapSrc already recorded the original src, so restore still works.
+      try {
+        const canvas = await urlToCanvas(url);
+        URL.revokeObjectURL(url);
+        const result = attachOverlay(el, canvas, kind);
+        return Object.assign(result, { reason: 'blob replace failed: ' + e.message });
+      } catch (e2) {
+        return { mode: 'overlay', ok: false, reason: e2.message };
+      }
+    }
+  }
+
   /** Wait until the browser has actually decoded (or refused) the new source. */
   function waitForDecode(el, timeoutMs) {
     return new Promise((resolve) => {
@@ -204,6 +267,7 @@ if (typeof globalThis.CTReplace === 'undefined') {
 
   globalThis.CTReplace = {
     apply,
+    applyImageBytes,
     restoreElement,
     restoreAll,
     mountOverlay,

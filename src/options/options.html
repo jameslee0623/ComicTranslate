@@ -29,6 +29,38 @@
         <select id="engineId"></select>
       </div>
       <p class="muted" id="engine-note"></p>
+
+      <div id="lara-fields" hidden>
+        <div class="grid">
+          <label for="laraAccessKeyId">Lara Access Key ID</label>
+          <input type="text" id="laraAccessKeyId" autocomplete="off"
+                 placeholder="from app.laratranslate.com/account/credentials">
+
+          <label for="laraAccessKeySecret">Lara Access Key Secret</label>
+          <input type="password" id="laraAccessKeySecret" autocomplete="off">
+
+          <label for="laraModel">Text-removal model</label>
+          <select id="laraModel">
+            <option value="overlay">Overlay — translation over the original (cheapest)</option>
+            <option value="inpainting">Inpainting — remove text, rebuild background</option>
+            <option value="generative_fast">Generative fast — redraws the page</option>
+            <option value="generative">Generative — highest quality, slowest</option>
+          </select>
+        </div>
+        <p class="muted small">
+          Lara is a paid API that meters usage in characters, and image
+          translation bills 10,000 characters per image: the free tier allows
+          roughly one page per month, Pro (500k chars) roughly 50. Cached pages
+          are always free. Requests are sent with X-No-Trace, so Lara neither
+          stores nor trains on your images.
+          <a href="https://app.laratranslate.com/account/credentials"
+             target="_blank" rel="noreferrer">Get credentials</a>.
+        </p>
+        <p>
+          <button id="lara-probe" class="secondary">Test Lara credentials</button>
+          <span id="lara-probe-result" class="muted small"></span>
+        </p>
+      </div>
     </section>
 
     <section>

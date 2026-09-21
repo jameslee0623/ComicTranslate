@@ -28,7 +28,7 @@ if [ ! -x "$JSC" ]; then
   exit 2
 fi
 
-echo "== 1/4 syntax: parsing every JS file =="
+echo "== 1/5 syntax: parsing every JS file =="
 python3 - "$FILE_LIST" <<'PY'
 import json, os, sys
 out = sys.argv[1]
@@ -38,7 +38,8 @@ files = sorted(
 )
 files += [os.path.abspath('tools/check_syntax.js'),
           os.path.abspath('tools/test_load.js'),
-          os.path.abspath('tools/test_pure.js')]
+          os.path.abspath('tools/test_pure.js'),
+          os.path.abspath('tools/test_lara.js')]
 json.dump(files, open(out, 'w'))
 print(f"   {len(files)} files queued")
 PY
@@ -47,20 +48,26 @@ if ! "$JSC" tools/check_syntax.js; then
 fi
 
 echo
-echo "== 2/4 load: every module must actually evaluate =="
+echo "== 2/5 load: every module must actually evaluate =="
 echo "   (catches runtime errors at load time that a parser cannot see)"
 if ! "$JSC" tools/test_load.js; then
   failures=$((failures + 1))
 fi
 
 echo
-echo "== 3/4 functional: pure content logic =="
+echo "== 3/5 functional: pure content logic =="
 if ! "$JSC" tools/test_pure.js; then
   failures=$((failures + 1))
 fi
 
 echo
-echo "== 4/4 semantic: cross-file consistency =="
+echo "== 4/5 lara: engine auth + request unit tests =="
+if ! "$JSC" tools/test_lara.js; then
+  failures=$((failures + 1))
+fi
+
+echo
+echo "== 5/5 semantic: cross-file consistency =="
 if ! python3 tools/check_semantics.py; then
   failures=$((failures + 1))
 fi
