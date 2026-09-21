@@ -110,7 +110,7 @@
     if (chip && chip.isConnected) return;
     chip = document.createElement('div');
     chip.style.cssText = [
-      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:2147483647',
+      'position:fixed', 'right:16px', 'top:16px', 'z-index:2147483647',
       'display:flex', 'align-items:center', 'gap:8px', 'padding:8px 14px',
       'background:rgba(24,24,38,.88)', 'color:#fff',
       'font:13px/1.4 system-ui,-apple-system,sans-serif',

@@ -191,7 +191,7 @@ same locally-painted output as the Lens engine.
 - **"Is it still translating?"** is answered two ways while work is in flight:
   the toolbar icon becomes a rotating arc (canvas-drawn frames swapped through
   `browser.action.setIcon`, restored to the static icon when the queue idles),
-  and the page shows a bottom-right chip — `Translating… 3/12 · 2,430 / 10,000
+  and the page shows a top-right chip — `Translating… 3/12 · 2,430 / 10,000
   chars`. The chip's spinner uses the Web Animations API, so a page's CSP
   cannot block it; click the chip to dismiss it.
 - **The usage meter** (`usage.js`) counts what Lara actually bills: text
