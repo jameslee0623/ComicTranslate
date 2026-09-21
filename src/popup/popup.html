@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ComicTranslate</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>ComicTranslate</h1>
+    <label class="switch" title="Translate this site">
+      <input type="checkbox" id="enabled">
+      <span>Enabled</span>
+    </label>
+  </header>
+
+  <p id="page-state" class="muted">Checking page…</p>
+
+  <section>
+    <label for="targetLang">Translate into</label>
+    <select id="targetLang"></select>
+  </section>
+
+  <section>
+    <label for="engineId">Engine</label>
+    <select id="engineId"></select>
+    <p id="engine-note" class="muted small"></p>
+  </section>
+
+  <section>
+    <label for="renderMode">Write result as</label>
+    <select id="renderMode">
+      <option value="replace">Replace the image (cleanest)</option>
+      <option value="overlay">Canvas overlay (CSP-proof)</option>
+    </select>
+  </section>
+
+  <div class="row">
+    <button id="scan-now">Translate now</button>
+    <button id="restore" class="secondary">Restore page</button>
+  </div>
+
+  <p id="status" class="muted small">Ready.</p>
+
+  <footer>
+    <button id="open-options" class="link">Settings</button>
+    <button id="clear-cache" class="link">Clear cache</button>
+  </footer>
+
+  <script src="../shared/languages.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

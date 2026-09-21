@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# logs / temporaries
+*.log
+*.tmp
+
+# packaging output
+*.zip
+node_modules/

@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "ComicTranslate",
+  "version": "0.1.0",
+  "description": "Translate the text inside images and comics in place, replacing the picture with a translated version.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "comictranslate@james.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+
+  "background": {
+    "service_worker": "src/background/background.js",
+    "scripts": [
+      "src/background/settings.js",
+      "src/background/cache.js",
+      "src/background/imageFetch.js",
+      "src/background/translator.js",
+      "src/background/protobuf.js",
+      "src/background/lensProto.js",
+      "src/background/lensEngine.js",
+      "src/background/engines.js",
+      "src/background/background.js"
+    ]
+  },
+
+  "permissions": ["storage", "unlimitedStorage", "tabs"],
+
+  "host_permissions": ["<all_urls>"],
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "js": [
+        "src/content/textLayout.js",
+        "src/content/painter.js",
+        "src/content/imageScanner.js",
+        "src/content/replaceImage.js",
+        "src/content/content.js"
+      ]
+    }
+  ],
+
+  "action": {
+    "default_title": "ComicTranslate",
+    "default_popup": "src/popup/popup.html"
+  },
+
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/fonts/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

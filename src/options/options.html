@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ComicTranslate — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>ComicTranslate settings</h1>
+
+    <section>
+      <h2>Languages</h2>
+      <div class="grid">
+        <label for="sourceLang">Source language</label>
+        <select id="sourceLang">
+          <option value="auto">Detect automatically</option>
+        </select>
+
+        <label for="targetLang">Target language</label>
+        <select id="targetLang"></select>
+      </div>
+    </section>
+
+    <section>
+      <h2>Engine</h2>
+      <div class="grid">
+        <label for="engineId">OCR + translation engine</label>
+        <select id="engineId"></select>
+      </div>
+      <p class="muted" id="engine-note"></p>
+    </section>
+
+    <section>
+      <h2>Rendering</h2>
+      <div class="grid">
+        <label for="renderMode">Write the result as</label>
+        <select id="renderMode">
+          <option value="replace">Replace the image element (cleanest)</option>
+          <option value="overlay">Canvas overlay (immune to page CSP)</option>
+        </select>
+
+        <label for="fontFamily">Font family (blank = built-in stack)</label>
+        <input type="text" id="fontFamily" placeholder="e.g. Comic Neue, sans-serif">
+
+        <label for="textStroke">Outline the translated text</label>
+        <input type="checkbox" id="textStroke">
+
+        <label for="scanBackgrounds">Also translate CSS background images</label>
+        <input type="checkbox" id="scanBackgrounds">
+      </div>
+    </section>
+
+    <section>
+      <h2>Limits</h2>
+      <div class="grid">
+        <label for="minImageSize">Minimum image size (px)</label>
+        <input type="number" id="minImageSize" min="16" max="4096" step="8">
+
+        <label for="maxImagesPerPage">Max images per page</label>
+        <input type="number" id="maxImagesPerPage" min="1" max="500" step="1">
+
+        <label for="requestDelayMs">Delay between requests (ms)</label>
+        <input type="number" id="requestDelayMs" min="0" max="60000" step="100">
+      </div>
+      <p class="muted small">
+        A low delay gets rate-limited by Google quickly. 1500 ms is a
+        reasonable floor.
+      </p>
+    </section>
+
+    <section>
+      <h2>Privacy</h2>
+      <p class="muted small">
+        Any image processed is uploaded to Google for OCR and translation — that
+        is inherent to using this extension. Requests are anonymous: no cookies
+        or account data are sent.
+      </p>
+    </section>
+
+    <section>
+      <h2>Sites</h2>
+      <div class="grid">
+        <label for="domainMode">Apply to</label>
+        <select id="domainMode">
+          <option value="all">All sites</option>
+          <option value="blocklist">All sites except the list</option>
+          <option value="allowlist">Only the list</option>
+        </select>
+      </div>
+      <label for="domains">Domains (one per line, suffix match)</label>
+      <textarea id="domains" rows="5" placeholder="mangadex.org&#10;example.com"></textarea>
+    </section>
+
+    <section>
+      <h2>Cache</h2>
+      <div class="grid">
+        <label for="cacheTtlDays">Keep results for (days, 0 = never cache)</label>
+        <input type="number" id="cacheTtlDays" min="0" max="365" step="1">
+      </div>
+      <p><button id="clear-cache" class="secondary">Clear cached translations</button></p>
+    </section>
+
+    <section>
+      <h2>Diagnostics</h2>
+      <p class="muted small">
+        Runs one image through the full engine on the current tab, bypassing the
+        cache, and prints what the engine actually returned. Use this when
+        translations stop working: Google's Lens DOM changes without notice.
+      </p>
+      <div class="grid">
+        <label for="diagIndex">Image index on the tab</label>
+        <input type="number" id="diagIndex" min="0" max="50" step="1" value="0">
+      </div>
+      <p>
+        <button id="run-diagnostic">Run diagnostic</button>
+        <button id="list-candidates" class="secondary">List candidates</button>
+      </p>
+      <pre id="diag-output">No diagnostic run yet.</pre>
+      <label for="debug">Verbose logging in the background console</label>
+      <input type="checkbox" id="debug">
+    </section>
+
+    <footer>
+      <span id="save-state" class="muted small">Changes save as you edit.</span>
+    </footer>
+  </main>
+
+  <script src="../shared/languages.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
