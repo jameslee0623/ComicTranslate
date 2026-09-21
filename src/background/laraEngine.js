@@ -14,6 +14,9 @@
  *        X-Lara-Date:  UTC date string
  *        Authorization: Lara:<base64(HMAC-SHA256(challenge, secret))>
  *        challenge = `${method}\n${path}\n${contentMD5}\n${contentType}\n${date}`
+ *      `path` is the FULL request path ('/v2/auth') - the server rebuilds the
+ *      challenge from the URI it receives, so a relative path fails with
+ *      "Invalid challenge signature".
  *      (the field name lies - the browser SDK digests with SHA-256, not MD5.
  *       The server verifies the digest only inside the HMAC, so any consistent
  *       digest works; the browser variant is what we mirror.)
@@ -29,7 +32,8 @@
 'use strict';
 
 if (typeof globalThis.CTLaraEngine === 'undefined') {
-  const API_BASE = 'https://api.laratranslate.com/v2';
+  const API_ROOT = 'https://api.laratranslate.com';
+  const API_BASE = API_ROOT + '/v2';
 
   function log(settings, ...args) {
     if (settings && settings.debug) console.log('[CT/lara]', ...args);
@@ -126,7 +130,11 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     return { id, secret };
   }
 
-  /** Signed POST with a JSON body; returns the parsed reply. */
+  /** Signed POST with a JSON body; returns the parsed reply.
+   *  `path` is the FULL request path (e.g. '/v2/auth'): the server rebuilds
+   *  the challenge from the URI it receives, so the signed string and the
+   *  fetched URL must show the exact same path. Signing '/auth' while sending
+   *  '/v2/auth' produced "Invalid challenge signature" from the live API. */
   async function signedJsonFetch(settings, path, body) {
     const { secret } = requireCredentials(settings);
     const date = new Date().toUTCString();
@@ -143,8 +151,9 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     headers.Authorization = 'Lara:' +
       (await hmac(secret, authChallenge('POST', path, contentMd5,
                                         headers['Content-Type'], date)));
+    log(settings, 'auth request:', path);
 
-    const res = await fetch(API_BASE + path, {
+    const res = await fetch(API_ROOT + path, {
       method: 'POST', headers, body: jsonBody
     });
     let data = null;
@@ -155,7 +164,7 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
   /** Fresh access-key authentication; sets token + refreshToken. */
   async function authenticate(settings) {
     const { id } = requireCredentials(settings);
-    const reply = await signedJsonFetch(settings, '/auth', { id });
+    const reply = await signedJsonFetch(settings, '/v2/auth', { id });
     if (!reply.ok || !reply.data || !reply.data.token) {
       const detail = reply.data && reply.data.message
         ? reply.data.message

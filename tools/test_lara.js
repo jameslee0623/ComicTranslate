@@ -70,6 +70,8 @@ globalThis.atob = function (s) {
 };
 
 // Deterministic fake WebCrypto: digest -> bytes 0..31, HMAC -> bytes 1,2,3.
+// lastSignData captures the challenge so tests can pin the signed path.
+var lastSignData = null;
 globalThis.crypto = {
   subtle: {
     digest: function () {
@@ -80,7 +82,8 @@ globalThis.crypto = {
     importKey: function (type, raw, algo) {
       return Promise.resolve({ type: type, raw: raw, algo: algo });
     },
-    sign: function () {
+    sign: function (algo, key, data) {
+      lastSignData = data;
       return Promise.resolve(new Uint8Array([1, 2, 3]).buffer);
     }
   }
@@ -205,6 +208,11 @@ async function main() {
      fetchCalls[0].opts.headers.Authorization, 'Lara:AQID');
   check('ensureToken: date header present',
         fetchCalls[0].opts.headers['X-Lara-Date'].indexOf('GMT') > 0);
+  // The live API rejected a challenge signed over '/auth': the server
+  // rebuilds the challenge from the request URI, so the FULL path must be
+  // signed. This is the regression test for "Invalid challenge signature".
+  eq('challenge: signs the full /v2/auth path',
+     bytesToString(new Uint8Array(lastSignData)).split('\n')[1], '/v2/auth');
   var t2 = await CTLaraEngine.ensureToken(settings);
   check('ensureToken: cached token reused without a second fetch',
         t2 === t && fetchCalls.length === 1);

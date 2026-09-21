@@ -39,7 +39,7 @@
           <label for="laraAccessKeySecret">Lara Access Key Secret</label>
           <input type="password" id="laraAccessKeySecret" autocomplete="off">
 
-          <label for="laraModel">Text-removal model</label>
+          <label for="laraModel">Text-removal model (full-image engine only)</label>
           <select id="laraModel">
             <option value="overlay">Overlay — translation over the original (cheapest)</option>
             <option value="inpainting">Inpainting — remove text, rebuild background</option>
@@ -48,11 +48,13 @@
           </select>
         </div>
         <p class="muted small">
-          Lara is a paid API that meters usage in characters, and image
-          translation bills 10,000 characters per image: the free tier allows
-          roughly one page per month, Pro (500k chars) roughly 50. Cached pages
-          are always free. Requests are sent with X-No-Trace, so Lara neither
-          stores nor trains on your images.
+          Lara meters usage in characters, two different ways. The full-image
+          engine bills 10,000 characters per image — about one page a month on
+          the free tier. The “Lens OCR + Lara text” engine bills the real
+          characters sent — a manga page is usually 500–1,500 — so the free
+          tier covers roughly 10–20 pages. Cached pages are always free.
+          Requests are sent with X-No-Trace, so Lara neither stores nor trains
+          on your images.
           <a href="https://app.laratranslate.com/account/credentials"
              target="_blank" rel="noreferrer">Get credentials</a>.
         </p>

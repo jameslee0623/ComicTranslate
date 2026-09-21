@@ -72,7 +72,8 @@ function fillEngines(engines, selected) {
             : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
               'without notice.')
     : '';
-  el('lara-fields').hidden = !(current && current.id === 'lara');
+  el('lara-fields').hidden = !(current &&
+    (current.id === 'lara' || current.id === 'lens-lara'));
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */

@@ -144,9 +144,13 @@ Auth mirrors the official browser SDK exactly (translated/lara-node,
 
 ```
 Authorization: Lara:<base64(HMAC-SHA256(challenge, secret))>
-challenge     = method ⏎ path ⏎ Content-MD5 ⏎ Content-Type ⏎ X-Lara-Date
+challenge     = method ⏎ full path ⏎ Content-MD5 ⏎ Content-Type ⏎ X-Lara-Date
 Content-MD5   = base64(SHA-256(body) truncated to 16 bytes)   ← the name lies
 ```
+
+The path in the challenge is the **full** request URI (`/v2/auth`): the server
+rebuilds the challenge from what it receives, so signing a relative path fails
+with `Invalid challenge signature`.
 
 The returned JWT is reused until 5 s before expiry, refreshed via
 `/v2/auth/refresh` (single-use rotated tokens), and every image call sends
