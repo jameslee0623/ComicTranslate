@@ -13,7 +13,6 @@ const els = {
   engineId: document.getElementById('engineId'),
   engineNote: document.getElementById('engine-note'),
   renderMode: document.getElementById('renderMode'),
-  sideBySide: document.getElementById('side-by-side'),
   scanNow: document.getElementById('scan-now'),
   restore: document.getElementById('restore'),
   status: document.getElementById('status'),
@@ -98,7 +97,6 @@ async function refreshPageState() {
   fillEngines(settings.engineId);
   els.enabled.checked = !!settings.enabled;
   els.renderMode.value = settings.renderMode;
-  els.sideBySide.checked = !!settings.showOriginalSideBySide;
 
   // Lara-billed engines get a month-to-date usage line against the cap.
   const usageEl = document.getElementById('lara-usage');
@@ -172,12 +170,6 @@ els.engineId.addEventListener('change', async () => {
 
 els.renderMode.addEventListener('change', async () => {
   await save({ renderMode: els.renderMode.value });
-  await pushToTab();
-});
-
-els.sideBySide.addEventListener('change', async () => {
-  await save({ showOriginalSideBySide: els.sideBySide.checked });
-  await pushToTab();
 });
 
 els.scanNow.addEventListener('click', async () => {

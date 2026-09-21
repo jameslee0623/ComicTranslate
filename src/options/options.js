@@ -13,7 +13,7 @@ const FIELDS = [
   'cacheTtlDays', 'domainMode',
   'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap'
 ];
-const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'showOriginalSideBySide', 'debug'];
+const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
 const saveState = document.getElementById('save-state');
 

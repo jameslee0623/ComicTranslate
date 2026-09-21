@@ -188,101 +188,10 @@ if (typeof globalThis.CTReplace === 'undefined') {
     if (node && node.parentNode) node.parentNode.removeChild(node);
   }
 
-  const SIDE_BY_SIDE_ATTR = 'data-ct-original-clone';
-  const SIDE_BY_SIDE_WRAP = 'data-ct-side-by-side';
-
-  /**
-   * Wrap a translated <img> in a flex row with a clone showing the original
-   * source: original on the left, translation on the right, each 50% wide.
-   * Called when the side-by-side toggle is turned on after images were already
-   * translated, and available as an option on fresh replacements.
-   *
-   * Returns true when a wrap was created. Skips anything that is not a
-   * translated <img> in 'replace' mode: overlays keep their own positioning,
-   * and background-image elements have no <img> to pair with.
-   */
-  function wrapSideBySide(el) {
-    const record = records.get(el);
-    if (!record || !record.translated || record.sideBySide) return false;
-    if (record.kind !== 'img' || el.tagName !== 'IMG') return false;
-    if (record.overlay) return false;
-    if (!record.originalSrc) return false;
-    const parent = el.parentNode;
-    if (!parent) return false;
-
-    const wrap = document.createElement('div');
-    wrap.setAttribute(SIDE_BY_SIDE_WRAP, 'true');
-    wrap.style.cssText = [
-      'display:flex', 'flex-direction:row', 'align-items:flex-start',
-      'gap:8px', 'width:100%', 'max-width:100%', 'box-sizing:border-box'
-    ].join(';');
-
-    const clone = document.createElement('img');
-    clone.setAttribute(SIDE_BY_SIDE_ATTR, 'true');
-    clone.src = record.originalSrc;
-    if (record.originalSrcset !== null && record.originalSrcset !== undefined) {
-      clone.setAttribute('srcset', record.originalSrcset);
-    }
-    if (record.originalSizes !== null && record.originalSizes !== undefined) {
-      clone.setAttribute('sizes', record.originalSizes);
-    }
-    clone.alt = el.alt || '';
-    clone.style.cssText = [
-      'flex:1 1 50%', 'width:50%', 'max-width:50%', 'height:auto',
-      'object-fit:contain', 'box-sizing:border-box'
-    ].join(';');
-
-    parent.insertBefore(wrap, el);
-    wrap.appendChild(clone);
-    wrap.appendChild(el);
-    el.style.flex = '1 1 50%';
-    el.style.maxWidth = '50%';
-    el.style.width = '50%';
-    el.style.height = 'auto';
-    el.style.boxSizing = 'border-box';
-
-    remember(el, { sideBySide: true, sideBySideWrap: wrap, sideBySideClone: clone });
-    return true;
-  }
-
-  /**
-   * Remove the side-by-side wrapper for one element: the clone is dropped and
-   * the translated <img> is moved back to its original position with its
-   * inline sizing restored.
-   */
-  function unwrapSideBySide(el) {
-    const record = records.get(el);
-    if (!record || !record.sideBySide) return false;
-    const wrap = record.sideBySideWrap;
-    const clone = record.sideBySideClone;
-    if (wrap && wrap.parentNode) {
-      wrap.parentNode.insertBefore(el, wrap);
-      wrap.parentNode.removeChild(wrap);
-    }
-    if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
-    el.style.flex = '';
-    el.style.maxWidth = '';
-    el.style.width = '';
-    el.style.height = '';
-    el.style.boxSizing = '';
-    remember(el, { sideBySide: false, sideBySideWrap: null, sideBySideClone: null });
-    return true;
-  }
-
-  /** Apply the side-by-side mode to every translated element on the page. */
-  function setSideBySide(on) {
-    let n = 0;
-    for (const el of Array.from(records.keys())) {
-      if (on ? wrapSideBySide(el) : unwrapSideBySide(el)) n++;
-    }
-    return n;
-  }
-
   function restoreElement(el) {
     const record = records.get(el);
     if (!record) return false;
 
-    unwrapSideBySide(el);
     if (record.overlay) unmountOverlay(record);
     if (record.blobUrl) URL.revokeObjectURL(record.blobUrl);
 
@@ -364,9 +273,6 @@ if (typeof globalThis.CTReplace === 'undefined') {
     mountOverlay,
     unmountOverlay,
     canvasToBlobUrl,
-    wrapSideBySide,
-    unwrapSideBySide,
-    setSideBySide,
     count
   };
 }
