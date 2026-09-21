@@ -1,8 +1,15 @@
 {
   "manifest_version": 3,
   "name": "ComicTranslate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Translate the text inside images and comics in place, replacing the picture with a translated version.",
+
+  "icons": {
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "96": "assets/icons/icon-96.png",
+    "128": "assets/icons/icon-128.png"
+  },
 
   "browser_specific_settings": {
     "gecko": {
@@ -15,6 +22,7 @@
     "service_worker": "src/background/background.js",
     "scripts": [
       "src/background/settings.js",
+      "src/background/usage.js",
       "src/background/cache.js",
       "src/background/imageFetch.js",
       "src/background/translator.js",
@@ -49,7 +57,12 @@
 
   "action": {
     "default_title": "ComicTranslate",
-    "default_popup": "src/popup/popup.html"
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png",
+      "96": "assets/icons/icon-96.png"
+    }
   },
 
   "options_ui": {

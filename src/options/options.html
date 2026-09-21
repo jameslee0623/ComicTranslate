@@ -136,6 +136,24 @@
     </section>
 
     <section>
+      <h2>Lara usage</h2>
+      <p class="muted small">
+        What the Lara engines bill this calendar month: text is counted by the
+        characters actually sent; the full-image engine bills a flat 10,000 per
+        image. Lara's own reset day is account-specific and unknowable here, so
+        the counter follows the calendar month and a manual reset is provided.
+        Free tier: 10,000 chars/month.
+      </p>
+      <div id="ct-usage-bar"><div id="ct-usage-fill"></div></div>
+      <p id="ct-usage-text" class="muted small">Loading…</p>
+      <div class="grid">
+        <label for="laraMonthlyCap">Monthly cap reference (chars)</label>
+        <input type="number" id="laraMonthlyCap" min="1000" max="100000000" step="1000">
+      </div>
+      <p><button id="reset-usage" class="secondary">Reset counter</button></p>
+    </section>
+
+    <section>
       <h2>Diagnostics</h2>
       <p class="muted small">
         Runs one image through the full engine on the current tab, bypassing the

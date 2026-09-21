@@ -52,6 +52,12 @@ if (typeof globalThis.CTSettings === 'undefined') {
     cacheTtlDays: 30,
 
     /**
+     * Reference monthly cap for the usage meter (Lara's free tier is
+     * 10,000 chars/month). Display only - the API enforces the real one.
+     */
+    laraMonthlyCap: 10000,
+
+    /**
      * Lara Translate credentials (https://laratranslate.com). Stored locally in
      * browser.storage; requests are signed in the background page and sent
      * directly to api.laratranslate.com. Empty = Lara engine unavailable.

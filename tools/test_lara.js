@@ -99,6 +99,25 @@ globalThis.fetch = function (url, opts) {
   return Promise.resolve(responder(url, opts));
 };
 
+// usage.js needs storage: a tiny in-memory fake.
+var storageMap = {};
+globalThis.browser = {
+  storage: {
+    local: {
+      get: function (key) {
+        var out = {};
+        if (key in storageMap) out[key] = storageMap[key];
+        return Promise.resolve(out);
+      },
+      set: function (obj) {
+        for (var k in obj) storageMap[k] = obj[k];
+        return Promise.resolve();
+      }
+    },
+    onChanged: { addListener: function () {} }
+  }
+};
+
 function jsonReply(status, body, headers) {
   return {
     ok: status >= 200 && status < 300,
@@ -133,10 +152,14 @@ function makeJwt(expSeconds) {
   return 'h.' + b64urlFromString('{"exp":' + expSeconds + '}') + '.s';
 }
 
-// ── load the module ──────────────────────────────────────────────────────────
-var src = readFile('src/background/laraEngine.js');
+// ── load the modules ─────────────────────────────────────────────────────────
+// usage.js first: translateTexts bills through it when it is defined.
+var src = readFile('src/background/usage.js');
+(0, eval)(src);
+src = readFile('src/background/laraEngine.js');
 (0, eval)(src);
 if (typeof CTLaraEngine === 'undefined') throw new Error('CTLaraEngine did not load');
+if (typeof CTUsage === 'undefined') throw new Error('CTUsage did not load');
 
 var settings = {
   laraAccessKeyId: 'id',
@@ -347,6 +370,44 @@ async function main() {
   try { await CTLaraEngine.translateTexts(['hi'], 'en', 'es', settings); } catch (e) { threw3 = e; }
   check('translateTexts: quota error carries the free-tier hint',
         !!threw3 && /quota exceeded/.test(threw3.message) && /10,000/.test(threw3.message));
+
+  // ── usage meter (free tier: 10,000 chars/month) ───────────────────────────
+  eq('usage: monthKey format', CTUsage.monthKey(new Date(2026, 0, 5)), '2026-01');
+  // start from a clean slate: earlier tests in this file billed chars.
+  delete storageMap['ct_usage'];
+  var snap = await CTUsage.snapshot();
+  check('usage: starts empty', snap.textChars === 0 && snap.imageCount === 0 &&
+        snap.totalChars === 0);
+  // data stored under a previous month is discarded, not carried over
+  storageMap['ct_usage'] = { monthKey: '2020-01', textChars: 999, imageCount: 7 };
+  snap = await CTUsage.snapshot();
+  check('usage: old-month data rolls off',
+        snap.textChars === 0 && snap.imageCount === 0 && snap.totalChars === 0);
+  // text translation bills the characters actually sent
+  CTLaraEngine.resetAuth();
+  fetchCalls.length = 0;
+  fetchQueue = [
+    function () { return jsonReply(200, { token: makeJwt(4102444800) }, {}); },
+    function () {
+      return {
+        ok: true, status: 200,
+        headers: { get: function () { return 'application/json'; } },
+        text: function () { return Promise.resolve('{"translation":["a","b"]}'); }
+      };
+    }
+  ];
+  await CTLaraEngine.translateTexts(['hello', 'world'], 'auto', 'es', settings);
+  snap = await CTUsage.snapshot();
+  eq('usage: translateTexts bills 10 chars', snap.textChars, 10);
+  // the image engine bills a flat 10,000 per call
+  await CTUsage.addImage();
+  snap = await CTUsage.snapshot();
+  eq('usage: image bills flat 10k', snap.totalChars, 10010);
+  check('usage: image count tracked', snap.imageCount === 1);
+  // manual reset (options page) clears everything
+  snap = await CTUsage.reset();
+  check('usage: reset clears everything',
+        snap.textChars === 0 && snap.imageCount === 0 && snap.totalChars === 0);
 
   print('');
   if (failed) {

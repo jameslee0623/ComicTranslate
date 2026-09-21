@@ -86,6 +86,75 @@
     };
   }
 
+  // ── in-page progress chip ──────────────────────────────────────────────────
+  // "Is it still translating?" answered without opening the popup: a small
+  // fixed chip with a spinner, per-image progress and the month's Lara usage.
+  // The spinner animates via the Web Animations API rather than a <style>
+  // block, because page CSP can forbid inline stylesheets but not el.animate.
+  let chip = null;
+  let chipLabel = null;
+  let chipHideTimer = null;
+  let lastUsage = null;
+
+  function fmtChars(n) {
+    return Number(n || 0).toLocaleString();
+  }
+
+  function usageSuffix() {
+    if (!lastUsage || !(lastUsage.totalChars > 0)) return '';
+    const cap = (settings && settings.laraMonthlyCap) || 10000;
+    return ' · ' + fmtChars(lastUsage.totalChars) + ' / ' + fmtChars(cap) + ' chars';
+  }
+
+  function ensureChip() {
+    if (chip && chip.isConnected) return;
+    chip = document.createElement('div');
+    chip.style.cssText = [
+      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:2147483647',
+      'display:flex', 'align-items:center', 'gap:8px', 'padding:8px 14px',
+      'background:rgba(24,24,38,.88)', 'color:#fff',
+      'font:13px/1.4 system-ui,-apple-system,sans-serif',
+      'border-radius:999px', 'box-shadow:0 2px 10px rgba(0,0,0,.35)',
+      'cursor:pointer', 'margin:0'
+    ].join(';');
+    chip.title = 'ComicTranslate is working on this page. Click to hide.';
+
+    const spinner = document.createElement('span');
+    spinner.style.cssText = [
+      'width:14px', 'height:14px', 'flex:none',
+      'border:2px solid rgba(255,255,255,.35)', 'border-top-color:#fff',
+      'border-radius:50%', 'display:inline-block'
+    ].join(';');
+    spinner.animate(
+      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+      { duration: 800, iterations: Infinity }
+    );
+    chip.appendChild(spinner);
+
+    chipLabel = document.createElement('span');
+    chip.appendChild(chipLabel);
+    chip.addEventListener('click', hideChip);
+    document.documentElement.appendChild(chip);
+    chip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
+  }
+
+  function chipText(text) {
+    ensureChip();
+    if (chipHideTimer) { clearTimeout(chipHideTimer); chipHideTimer = null; }
+    if (chipLabel) chipLabel.textContent = text;
+  }
+
+  function hideChip() {
+    if (chipHideTimer) { clearTimeout(chipHideTimer); chipHideTimer = null; }
+    if (chip) {
+      const gone = chip;
+      chip = null;
+      chipLabel = null;
+      gone.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180 });
+      setTimeout(() => gone.remove(), 200);
+    }
+  }
+
   async function translateOne(candidate) {
     const el = candidate.el;
     const tainted = candidate.type === 'img' && isTainted(el);
@@ -97,6 +166,7 @@
       height: candidate.height,
       needBytes: tainted
     });
+    if (result.usage) lastUsage = result.usage;
 
     // Full-image engines (Lara) return a server-rendered translation: no
     // local painting at all, just put the bitmap into the page.
@@ -191,8 +261,15 @@
           limit: settings.maxImagesPerPage
         }).filter((c) => !CTImageScanner.hasSeen(c.el) && attemptCount(c.el) < MAX_ATTEMPTS);
 
+        if (candidates.length) {
+          chipText('Translating… 0/' + candidates.length + usageSuffix());
+        }
+
+        let runIndex = 0;
         for (const candidate of candidates) {
           if (!settings.enabled) break;
+          runIndex++;
+          chipText('Translating… ' + runIndex + '/' + candidates.length + usageSuffix());
 
           try {
             const outcome = await translateOne(candidate);
@@ -209,6 +286,12 @@
           // Pace ourselves: the Lens engine drives a shared tab, and hammering
           // Google is the fastest way to get a session rate-limited.
           await new Promise((r) => setTimeout(r, settings.requestDelayMs || 1500));
+        }
+
+        if (candidates.length) {
+          chipText((settings.enabled ? 'Done' : 'Paused') + ' · ' +
+                   runIndex + '/' + candidates.length + ' images' + usageSuffix());
+          chipHideTimer = setTimeout(hideChip, 3200);
         }
       } while (queued);
     } finally {
@@ -315,6 +398,7 @@
       case 'CT_RESTORE':
         stopObserver();
         if (settings) settings.enabled = false;
+        hideChip();
         return Promise.resolve({ restored: CTReplace.restoreAll() });
 
       case 'CT_GET_STATUS':

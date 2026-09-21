@@ -113,6 +113,8 @@ if (typeof globalThis.CTEngines === 'undefined') {
         hit.bytes = fetched.bytes;
         hit.mime = fetched.mime;
       }
+      // Cache hits are free, so the meter the UI shows stays as-is.
+      if (globalThis.CTUsage) hit.usage = await CTUsage.snapshot();
       return hit;
     }
 
@@ -139,6 +141,8 @@ if (typeof globalThis.CTEngines === 'undefined') {
     // regions; it is cached like any other result, so repeat views stay free.
     if (result.image && result.image.bytes) {
       payload.image = { bytes: result.image.bytes, mime: result.image.mime || 'image/png' };
+      // The image engine bills a flat 10,000 characters per successful call.
+      if (globalThis.CTUsage) await CTUsage.addImage();
     }
 
     if ((payload.image || payload.regions.length) && settings.cacheTtlDays > 0) {
@@ -156,6 +160,7 @@ if (typeof globalThis.CTEngines === 'undefined') {
     // full-image result already carries everything the page needs, so the
     // original bytes would just double the message size.
     if (!payload.image && req.needBytes) response.bytes = fetched.bytes;
+    if (globalThis.CTUsage) response.usage = await CTUsage.snapshot();
     return response;
   }
 

@@ -423,6 +423,11 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     }
     if (!last) throw new Error('Lara text translation returned an unparseable response');
 
+    // Bill the characters actually sent - this is what the free tier caps.
+    if (globalThis.CTUsage) {
+      await CTUsage.addTextChars(texts.join('').length);
+    }
+
     log(settings, 'text batch:', texts.length, 'lines,',
         texts.join('').length, 'chars billed');
     const tr = last.translation;

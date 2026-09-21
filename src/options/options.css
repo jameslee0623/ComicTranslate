@@ -114,3 +114,24 @@ pre {
 }
 
 footer { margin-top: 8px; }
+
+/* Lara usage meter */
+#ct-usage-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+  margin: 4px 0 6px;
+}
+
+#ct-usage-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: #6366f1;
+  transition: width .3s ease;
+}
+
+#ct-usage-fill.over {
+  background: #e11d48;
+}

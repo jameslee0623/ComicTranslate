@@ -98,6 +98,23 @@ async function refreshPageState() {
   els.enabled.checked = !!settings.enabled;
   els.renderMode.value = settings.renderMode;
 
+  // Lara-billed engines get a month-to-date usage line against the cap.
+  const usageEl = document.getElementById('lara-usage');
+  if (settings.engineId === 'lara' || settings.engineId === 'lens-lara') {
+    try {
+      const u = await bg('CT_GET_USAGE');
+      const cap = settings.laraMonthlyCap || 10000;
+      usageEl.hidden = false;
+      usageEl.textContent = 'Lara this month: ' + u.totalChars.toLocaleString() +
+        ' / ' + cap.toLocaleString() + ' chars (' + u.textChars.toLocaleString() +
+        ' text + ' + u.imageCount + ' image ×10k).';
+    } catch {
+      usageEl.hidden = true;
+    }
+  } else {
+    usageEl.hidden = true;
+  }
+
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   activeTab = tabs[0];
 

@@ -73,9 +73,9 @@ globalThis.browser = {
   }
 };
 
-var BACKGROUND = ['settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
-                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
-                  'lensLaraEngine.js', 'engines.js', 'background.js'];
+var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
+                  'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
+                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -112,6 +112,7 @@ loadAll('content', CONTENT);
 // --- assert the exported surface exists -------------------------------------
 var EXPECTED = {
   CTSettings: ['DEFAULTS', 'load', 'get', 'set', 'onChange', 'isAllowedOn'],
+  CTUsage: ['monthKey', 'addTextChars', 'addImage', 'snapshot', 'reset'],
   CTCache: ['makeKey', 'get', 'put', 'prune', 'clear', 'hashBytes'],
   CTImageFetch: ['fetchImageBytes', 'sniffMime', 'normaliseMime', 'measure'],
   CTEngines: ['register', 'get', 'list', 'translateImage', 'normaliseRegion'],

@@ -27,6 +27,10 @@ m = json.load(open("manifest.json"))
 refs = list(m["background"]["scripts"]) + [m["background"]["service_worker"]]
 refs += m["content_scripts"][0]["js"]
 refs += [m["action"]["default_popup"], m["options_ui"]["page"]]
+for p in (m.get("icons") or {}).values():
+    refs.append(p)
+for p in ((m.get("action") or {}).get("default_icon") or {}).values():
+    refs.append(p)
 for entry in m.get("web_accessible_resources", []):
     for r in entry["resources"]:
         if "*" not in r:
@@ -52,7 +56,8 @@ for html in ["src/popup/popup.html", "src/options/options.html"]:
 settings_src = open("src/background/settings.js").read()
 for key in ["renderMode", "scanBackgrounds", "textStroke", "fontFamily", "minImageSize",
             "maxImagesPerPage", "requestDelayMs", "cacheTtlDays", "domainMode", "domains",
-            "debug", "engineId", "sourceLang", "targetLang", "enabled"]:
+            "debug", "engineId", "sourceLang", "targetLang", "enabled",
+            "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap"]:
     if not re.search(r"\b" + key + r"\s*:", settings_src):
         fail("settings.js DEFAULTS is missing key: " + key)
 

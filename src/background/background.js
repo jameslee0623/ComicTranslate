@@ -13,9 +13,9 @@
 // double evaluation, so this is a no-op under Firefox.
 if (typeof importScripts === 'function') {
   try {
-    importScripts('settings.js', 'cache.js', 'imageFetch.js', 'translator.js',
-                  'protobuf.js', 'lensProto.js', 'lensEngine.js', 'laraEngine.js',
-                  'lensLaraEngine.js', 'engines.js');
+    importScripts('settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
+                  'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
+                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -32,6 +32,87 @@ function serialize(task) {
   // Keep the chain alive even when a task throws.
   queue = run.then(() => undefined, () => undefined);
   return run;
+}
+
+// ── toolbar "translating" animation ──────────────────────────────────────────
+// While any translation is in flight the toolbar icon becomes a rotating arc.
+// setIcon accepts ImageData records, so frames are drawn once on a canvas and
+// swapped on a timer; the static manifest PNG is restored when the queue idles.
+const SPIN_PATHS = {
+  32: 'assets/icons/icon-32.png',
+  48: 'assets/icons/icon-48.png',
+  96: 'assets/icons/icon-96.png'
+};
+let spinFrames = null;   // [{32: ImageData, 64: ImageData}, ...]
+let spinTimer = null;
+let spinIndex = 0;
+let spinBusy = 0;
+
+function makeCanvas(size) {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(size, size);
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    return c;
+  }
+  return null;
+}
+
+function renderSpinnerFrames() {
+  const FRAMES = 12;
+  const frames = [];
+  for (let f = 0; f < FRAMES; f++) {
+    const angle = (f / FRAMES) * Math.PI * 2;
+    const set = {};
+    for (const s of [32, 64]) {
+      const canvas = makeCanvas(s);
+      if (!canvas) return null;
+      const ctx = canvas.getContext('2d');
+      const c = s / 2;
+      ctx.clearRect(0, 0, s, s);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = s * 0.13;
+      // faint full ring...
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.30)';
+      ctx.beginPath();
+      ctx.arc(c, c, s * 0.30, 0, Math.PI * 2);
+      ctx.stroke();
+      // ...with a bright rotating arc on top
+      ctx.strokeStyle = '#6366F1';
+      ctx.beginPath();
+      ctx.arc(c, c, s * 0.30, angle, angle + Math.PI * 1.25);
+      ctx.stroke();
+      set[s] = ctx.getImageData(0, 0, s, s);
+    }
+    frames.push(set);
+  }
+  return frames;
+}
+
+function startSpin() {
+  spinBusy++;
+  if (!browser.action || !browser.action.setIcon || spinTimer) return;
+  if (!spinFrames) spinFrames = renderSpinnerFrames();
+  if (!spinFrames) return; // no canvas in this context; nothing to animate
+  spinIndex = 0;
+  spinTimer = setInterval(() => {
+    try {
+      spinIndex = (spinIndex + 1) % spinFrames.length;
+      browser.action.setIcon({ imageData: spinFrames[spinIndex] })
+        .catch(() => {});
+    } catch {
+      // a failed frame swap must never take the queue down
+    }
+  }, 110);
+}
+
+function stopSpin() {
+  spinBusy = Math.max(0, spinBusy - 1);
+  if (spinBusy > 0 || !spinTimer) return;
+  clearInterval(spinTimer);
+  spinTimer = null;
+  try { browser.action.setIcon({ path: SPIN_PATHS }); } catch { /* noop */ }
 }
 
 function cap(value, max) {
@@ -119,19 +200,25 @@ async function handle(msg, sender) {
       const tabId = sender.tab ? sender.tab.id : msg.tabId;
       const frameId = typeof sender.frameId === 'number' ? sender.frameId : msg.frameId;
 
-      const result = await serialize(() =>
-        CTEngines.translateImage({
-          url: msg.url,
-          width: msg.width || 0,
-          height: msg.height || 0,
-          needBytes: !!msg.needBytes,
-          sourceLang: msg.sourceLang || settings.sourceLang,
-          targetLang: msg.targetLang || settings.targetLang,
-          settings,
-          tabId,
-          frameId
-        })
-      );
+      startSpin();
+      let result;
+      try {
+        result = await serialize(() =>
+          CTEngines.translateImage({
+            url: msg.url,
+            width: msg.width || 0,
+            height: msg.height || 0,
+            needBytes: !!msg.needBytes,
+            sourceLang: msg.sourceLang || settings.sourceLang,
+            targetLang: msg.targetLang || settings.targetLang,
+            settings,
+            tabId,
+            frameId
+          })
+        );
+      } finally {
+        stopSpin();
+      }
 
       if (result.diagnostics && result.diagnostics.dump) {
         result.diagnostics.dump = cap(result.diagnostics.dump, 20000);
@@ -177,20 +264,26 @@ async function handle(msg, sender) {
       const index = Number.isInteger(msg.index) ? msg.index : 0;
       const target = candidates[Math.min(index, candidates.length - 1)];
 
-      const result = await serialize(() =>
-        CTEngines.translateImage({
-          url: target.url,
-          width: target.width,
-          height: target.height,
-          needBytes: false,
-          noCache: true,
-          sourceLang: msg.sourceLang || settings.sourceLang,
-          targetLang: msg.targetLang || settings.targetLang,
-          settings,
-          tabId: tab.id,
-          frameId: 0
-        })
-      );
+      startSpin();
+      let result;
+      try {
+        result = await serialize(() =>
+          CTEngines.translateImage({
+            url: target.url,
+            width: target.width,
+            height: target.height,
+            needBytes: false,
+            noCache: true,
+            sourceLang: msg.sourceLang || settings.sourceLang,
+            targetLang: msg.targetLang || settings.targetLang,
+            settings,
+            tabId: tab.id,
+            frameId: 0
+          })
+        );
+      } finally {
+        stopSpin();
+      }
 
       // The options page never needs megabytes of image data: report size+mime.
       if (result.image && result.image.bytes) {
@@ -201,6 +294,12 @@ async function handle(msg, sender) {
       }
       return { target, candidates, result, tabUrl: tab.url };
     }
+
+    case 'CT_GET_USAGE':
+      return CTUsage.snapshot();
+
+    case 'CT_RESET_USAGE':
+      return CTUsage.reset();
 
     case 'CT_LARA_PROBE': {
       // Free credential check: /v2/auth only, never an image (an image bills

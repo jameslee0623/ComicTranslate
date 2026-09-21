@@ -11,7 +11,7 @@ const FIELDS = [
   'sourceLang', 'targetLang', 'engineId', 'renderMode', 'fontFamily',
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
-  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel'
+  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -113,7 +113,28 @@ async function load() {
   el('laraAccessKeyId').value = s.laraAccessKeyId || '';
   el('laraAccessKeySecret').value = s.laraAccessKeySecret || '';
   el('laraModel').value = s.laraModel || 'inpainting';
+  el('laraMonthlyCap').value = s.laraMonthlyCap || 10000;
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
+  renderUsage();
+}
+
+/** Month-to-date Lara usage against the reference cap. */
+async function renderUsage() {
+  const text = el('ct-usage-text');
+  const fill = el('ct-usage-fill');
+  try {
+    const u = await bg('CT_GET_USAGE');
+    const cap = Number(el('laraMonthlyCap').value) || 10000;
+    fill.style.width = Math.min(100, (u.totalChars / cap) * 100).toFixed(1) + '%';
+    fill.classList.toggle('over', u.totalChars > cap);
+    text.textContent =
+      u.textChars.toLocaleString() + ' text chars + ' + u.imageCount +
+      ' image(s) ×10,000 = ' + u.totalChars.toLocaleString() + ' / ' +
+      cap.toLocaleString() + ' chars' +
+      (u.totalChars > cap ? ' — over the reference cap' : ' this month');
+  } catch (e) {
+    text.textContent = 'Could not load usage: ' + e.message;
+  }
 }
 
 for (const id of FIELDS) {
@@ -141,6 +162,15 @@ el('domains').addEventListener('change', () => {
 el('clear-cache').addEventListener('click', async () => {
   await bg('CT_CACHE_CLEAR');
   out.textContent = 'Cache cleared.';
+});
+
+// Changing the cap reference re-renders the usage bar immediately.
+el('laraMonthlyCap').addEventListener('change', () => renderUsage());
+
+el('reset-usage').addEventListener('click', async () => {
+  await bg('CT_RESET_USAGE');
+  await renderUsage();
+  flash('Usage counter reset.');
 });
 
 el('lara-probe').addEventListener('click', async () => {
