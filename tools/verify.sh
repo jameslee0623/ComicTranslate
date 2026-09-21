@@ -11,7 +11,7 @@
 #   3. cross-file references resolve   (manifest paths, element ids, exports)
 #
 # It does NOT prove the extension works in Firefox. Load it with
-# about:debugging and use the options page diagnostics for that.
+# about:debugging and translate a real page for that.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

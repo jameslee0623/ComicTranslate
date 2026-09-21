@@ -14,7 +14,7 @@ if (typeof globalThis.CTImageScanner === 'undefined') {
 
   /**
    * Vector files are always logos, icons or UI chrome, never comic lettering, so
-   * they are never worth OCR. Observed in practice: the diagnostics picked
+   * they are never worth OCR. Observed in practice: the scanner once picked
    * EXAMPLE-MANGA-SITE's 300x141 logo.svg as the first candidate on a manga page.
    */
   const VECTOR = /\.svgz?($|[?#])/i;
@@ -130,8 +130,8 @@ if (typeof globalThis.CTImageScanner === 'undefined') {
 
     // Largest first, because on a reader page the content is almost always the
     // biggest image. Sorting before the cap means the per-page quota is spent on
-    // real panels rather than logos and thumbnails, and it makes index 0 of the
-    // diagnostics the image the user actually cares about.
+    // real panels rather than logos and thumbnails, so the largest image —
+    // the one the user actually cares about — is processed first.
     results.sort((a, b) => (b.width * b.height) - (a.width * a.height));
     return results.slice(0, limit);
   }

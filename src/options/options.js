@@ -15,7 +15,6 @@ const FIELDS = [
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
-const out = document.getElementById('diag-output');
 const saveState = document.getElementById('save-state');
 
 function el(id) { return document.getElementById(id); }
@@ -190,65 +189,4 @@ el('lara-probe').addEventListener('click', async () => {
   }
 });
 
-el('list-candidates').addEventListener('click', async () => {
-  out.textContent = 'Looking for images on your most recently used web page...';
-  try {
-    // Resolved in the background, NOT with tabs.query({active:true}) here: this
-    // options page is itself a tab, so "active tab" would be this page, and
-    // content scripts do not exist on moz-extension:// URLs.
-    const data = await bg('CT_LIST_CANDIDATES', { limit: 20 });
-    const header = 'tab: ' + (data.tabTitle || '(untitled)') + '\n     ' +
-                   (data.tabUrl || '(unknown)') + '\n\n';
-    const candidates = data.candidates || [];
-    out.textContent = header + (candidates.length
-      ? candidates.map((c, i) =>
-          `[${i}] ${c.width}x${c.height} ${c.type} seen=${c.seen}\n     ${c.url}`).join('\n')
-      : 'No candidate images found. Scroll the page so the images load, then retry.');
-  } catch (e) {
-    out.textContent = 'Failed: ' + e.message;
-  }
-});
-
-el('run-diagnostic').addEventListener('click', async () => {
-  out.textContent = 'Running the full engine on one image… this uploads the ' +
-    'image to the configured engine\u2019s services (Google Lens and/or Lara).';
-  const started = Date.now();
-  try {
-    const data = await bg('CT_LENS_DIAGNOSE', { index: Number(el('diagIndex').value) || 0 });
-    const seconds = ((Date.now() - started) / 1000).toFixed(1);
-
-    if (data.error) {
-      out.textContent = data.error + '\n\ntab: ' + (data.tabUrl || '(unknown)') +
-        '\n\nCandidates:\n' +
-        (data.candidates || []).map((c, i) => `[${i}] ${c.width}x${c.height} ${c.url}`).join('\n');
-      return;
-    }
-
-    const result = data.result || {};
-    const summary = [
-      `took ${seconds}s`,
-      `tab: ${data.tabUrl}`,
-      `target: ${data.target.width}x${data.target.height} ${data.target.url}`,
-      `engineId: ${result.engineId}`,
-      `via: ${result.via}`,
-      `cached: ${result.cached}`,
-      result.image
-        ? `image: ${result.image.bytesLen} bytes, ${result.image.mime}`
-        : `regions: ${(result.regions || []).length}`,
-      'diagnostics:',
-      JSON.stringify(result.diagnostics || null, null, 2)
-    ].join('\n');
-
-    const regions = (result.regions || []).map((r, i) =>
-      `[${i}] bbox=${r.bbox.x},${r.bbox.y},${r.bbox.w}x${r.bbox.h} ` +
-      `text=${JSON.stringify(r.text)} translated=${JSON.stringify(r.translated)}`
-    ).join('\n');
-
-    out.textContent = summary +
-      (result.image ? '' : '\n\n--- regions ---\n' + (regions || '(none)'));
-  } catch (e) {
-    out.textContent = 'Diagnostic failed: ' + e.message;
-  }
-});
-
-load().catch((e) => { out.textContent = 'Could not load settings: ' + e.message; });
+load().catch((e) => { saveState.textContent = 'Could not load settings: ' + e.message; });

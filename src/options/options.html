@@ -154,21 +154,7 @@
     </section>
 
     <section>
-      <h2>Diagnostics</h2>
-      <p class="muted small">
-        Runs one image through the full engine on the current tab, bypassing the
-        cache, and prints what the engine actually returned. Use this when
-        translations stop working: Google's Lens DOM changes without notice.
-      </p>
-      <div class="grid">
-        <label for="diagIndex">Image index on the tab</label>
-        <input type="number" id="diagIndex" min="0" max="50" step="1" value="0">
-      </div>
-      <p>
-        <button id="run-diagnostic">Run diagnostic</button>
-        <button id="list-candidates" class="secondary">List candidates</button>
-      </p>
-      <pre id="diag-output">No diagnostic run yet.</pre>
+      <h2>Advanced</h2>
       <label for="debug">Verbose logging in the background console</label>
       <input type="checkbox" id="debug">
     </section>

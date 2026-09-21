@@ -3,10 +3,10 @@
 A Firefox extension that finds images and comics on a page, translates the text
 *inside* them, and swaps the picture for a translated version.
 
-**Status:** working skeleton. The full pipeline, engine abstraction, renderer and
-UI are implemented and load in Firefox. The Google Lens parser is written against
-the DOM structure the extension *expects*, and ships with a diagnostic because
-Google does not document that structure — see [Verifying it works](#verifying-it-works).
+**Status:** working extension. The full pipeline, engine abstraction, renderer and
+UI are implemented and load in Firefox. Three engines are available: anonymous
+Google Lens OCR, Lara's official image API, and Lens OCR combined with Lara
+text translation — see [Engines](#lara-translate-engine-official-paid).
 
 ---
 
@@ -266,21 +266,19 @@ counterpart that actually *runs* the module's top level. (The list above is now
 five stages — stage 4 covers the Lara engine.)
 
 `verify.sh` proves the code is self-consistent. It does **not** prove the
-extension works in Firefox, and it cannot test the Lens parser — only the
-diagnostics below can.
+extension works in Firefox — only translating a real page does that
+(see [Verifying it works](#verifying-it-works)).
 
 ## Verifying it works
 
-The endpoints are undocumented, so the extension ships a diagnostic rather than
-pretending the pipeline is known-good.
+1. Load the extension via `about:debugging#/runtime/this-firefox` → Load
+   Temporary Add-on → `manifest.json`.
+2. Open a page with a comic page or manga panel, enable the extension in the
+   toolbar popup, and watch the page translate in place.
 
-1. Open a page with a comic page or manga panel.
-2. Options → **Diagnostics** → **List candidates** — confirms images are being
-   found at all. If this is empty, scroll the page so images load.
-3. **Run diagnostic** — runs the real engine on one image and prints the
-   regions it extracted, the detected language and the translated lines.
-
-Outcomes, each with a clear meaning:
+Outcomes are visible on the page itself and in the background console
+(`about:debugging` → Inspect → Console, with verbose logging enabled in
+Advanced settings):
 
 | Symptom | Meaning | Where to look |
 |---|---|---|
@@ -291,10 +289,8 @@ Outcomes, each with a clear meaning:
 | Boxes land in the wrong place | Normalised→pixel maths, or a downscaled send | `boxToPixels` / `rescaleRegions` in `lensProto.js` |
 | `Could not reach the ComicTranslate content script` | The page was open before the extension was loaded | Reload the page (F5) |
 
-Note that the diagnostic ignores the Enabled switch on purpose, so a parser can
-be debugged without translating anything yet.
-
-Then flip **Enabled** in the toolbar popup.
+The popup's **Translate now / Restore page** buttons force a re-run without
+touching settings.
 
 ## Known limitations
 
@@ -313,10 +309,8 @@ Then flip **Enabled** in the toolbar popup.
 
 ## Next steps, in the order I would do them
 
-1. Run the diagnostic on a real manga page and tune `lensScrape.js` against the
-   actual DOM dump.
-2. Bundle subsetted Noto fonts and register them with the `FontFace` API.
-3. Add `googleCloudEngine.js` (Vision + Translation v3) behind the existing
+1. Bundle subsetted Noto fonts and register them with the `FontFace` API.
+2. Add `googleCloudEngine.js` (Vision + Translation v3) behind the existing
    interface, so a key can be used when Lens breaks.
-4. Add per-site CSS selector overrides for readers whose markup defeats the
+3. Add per-site CSS selector overrides for readers whose markup defeats the
    generic scanner.

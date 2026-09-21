@@ -413,24 +413,6 @@
         runQueue();
         return Promise.resolve({ started: true });
 
-      // Used by the options page's diagnostic, and by the background's
-      // CT_LENS_DIAGNOSE handler. Returns descriptors only, never DOM nodes,
-      // because elements cannot cross the message boundary.
-      case 'CT_GET_CANDIDATES':
-        return Promise.resolve({
-          candidates: CTImageScanner.scan({
-            minSize: (msg.minSize || (settings && settings.minImageSize) || 120),
-            includeBackgrounds: !!(settings && settings.scanBackgrounds),
-            limit: msg.limit || 20
-          }).map((c) => ({
-            url: c.url,
-            type: c.type,
-            width: c.width,
-            height: c.height,
-            seen: CTImageScanner.hasSeen(c.el)
-          }))
-        });
-
       default:
         return undefined;
     }
