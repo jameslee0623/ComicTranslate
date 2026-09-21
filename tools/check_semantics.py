@@ -54,7 +54,7 @@ for html in ["src/popup/popup.html", "src/options/options.html"]:
 
 # 3. settings keys used by the UI and content script must exist in DEFAULTS
 settings_src = open("src/background/settings.js").read()
-for key in ["renderMode", "scanBackgrounds", "textStroke", "fontFamily", "minImageSize",
+for key in ["renderMode", "scanBackgrounds", "showOriginalSideBySide", "textStroke", "fontFamily", "minImageSize",
             "maxImagesPerPage", "requestDelayMs", "cacheTtlDays", "domainMode", "domains",
             "debug", "engineId", "sourceLang", "targetLang", "enabled",
             "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap"]:

@@ -178,6 +178,9 @@
       log('applied image', applied);
       if (!applied.ok) throw new Error(applied.reason || 'apply failed');
       stats.translated++;
+      if (settings.showOriginalSideBySide && applied.mode === 'replace') {
+        CTReplace.wrapSideBySide(candidate.el);
+      }
       return { ok: true, mode: applied.mode };
     }
 
@@ -226,6 +229,9 @@
     if (!applied.ok) throw new Error(applied.reason || 'apply failed');
 
     stats.translated++;
+    if (settings.showOriginalSideBySide && applied.mode === 'replace') {
+      CTReplace.wrapSideBySide(candidate.el);
+    }
     return { ok: true, mode: applied.mode, drawn: painted.drawn };
   }
 
@@ -371,6 +377,12 @@
     if (stale) {
       CTReplace.restoreAll();
       CTImageScanner.reset();
+    }
+
+    // Side-by-side is a pure view toggle: re-wrap or unwrap the images that
+    // are already translated, without re-scanning or re-translating anything.
+    if (!stale && !!previous && !!previous.showOriginalSideBySide !== !!next.showOriginalSideBySide) {
+      CTReplace.setSideBySide(!!next.showOriginalSideBySide);
     }
 
     const allowed = await send('CT_CHECK_PAGE', { url: location.href });

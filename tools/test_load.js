@@ -130,7 +130,8 @@ var EXPECTED = {
   CTImageScanner: ['scan', 'isEligibleUrl', 'markSeen', 'hasSeen', 'reset',
                    'imgCandidate', 'backgroundCandidate'],
   CTReplace: ['apply', 'applyImageBytes', 'restoreElement', 'restoreAll', 'mountOverlay',
-              'unmountOverlay', 'canvasToBlobUrl', 'count']
+              'unmountOverlay', 'canvasToBlobUrl', 'wrapSideBySide', 'unwrapSideBySide',
+              'setSideBySide', 'count']
 };
 
 print('');

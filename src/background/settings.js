@@ -38,6 +38,14 @@ if (typeof globalThis.CTSettings === 'undefined') {
     /** Also translate CSS background-image elements. Off: expensive to scan. */
     scanBackgrounds: false,
 
+    /**
+     * Keep the original visible next to the translation: the translated <img>
+     * is wrapped in a flex row with a clone showing the original source, each
+     * at 50% width. Only applies to <img> in 'replace' mode; overlays and
+     * background images are unaffected.
+     */
+    showOriginalSideBySide: false,
+
     /** Outline text for legibility over artwork rather than flat bubbles. */
     textStroke: true,
 

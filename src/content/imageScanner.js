@@ -55,6 +55,9 @@ if (typeof globalThis.CTImageScanner === 'undefined') {
    */
   function imgCandidate(el, minSize) {
     if (!el || el.tagName !== 'IMG') return null;
+    // Side-by-side original clones are page chrome we created ourselves: never
+    // re-scan them, or the translator would translate its own output.
+    if (el.hasAttribute && el.hasAttribute('data-ct-original-clone')) return null;
     if (el.currentSrc === '' && !el.src) return null;
     const url = el.currentSrc || el.src;
     if (!isEligibleUrl(url)) return null;
