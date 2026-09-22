@@ -110,7 +110,7 @@ if (typeof globalThis.CTImageScanner === 'undefined') {
    */
   function scan(options) {
     const opts = options || {};
-    const minSize = opts.minSize || 120;
+    const minSize = opts.minSize || 600;
     const limit = opts.limit || 40;
     const results = [];
 

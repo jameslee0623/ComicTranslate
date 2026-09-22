@@ -12,15 +12,28 @@ if (typeof globalThis.CTSettings === 'undefined') {
     /** Master switch. Off by default so a fresh install never phones home. */
     enabled: false,
 
-    /** Which OCR/translation engine to use. See engines.js for the registry. */
+    /**
+     * Which OCR/translation engine to use. See engines.js for the registry.
+     *
+     * 'lens' is the DELIBERATE default: it is the only engine that is free,
+     * needs no credentials and consumes no quota, so a fresh install can never
+     * run up a bill or hit a hard 429 by accident. The Lara engines are strictly
+     * opt-in - the image engine alone bills a flat 10,000 characters per
+     * picture, the entire monthly API allowance of the free plan.
+     */
     engineId: 'lens',
 
     /** 'auto' lets the engine detect the source language. */
     sourceLang: 'auto',
     targetLang: 'en',
 
-    /** Ignore images smaller than this on either axis (filters icons/spacers). */
-    minImageSize: 120,
+    /**
+     * Ignore images smaller than this on either axis. 600px filters icons,
+     * spacers, avatars and - importantly - manga thumbnail grids, each of which
+     * would otherwise cost a full upload and a translation slot. Real page
+     * images are essentially always 800px or more on the short edge.
+     */
+    minImageSize: 600,
 
     /** Upper bound on images translated per page load, to bound cost/load. */
     maxImagesPerPage: 40,

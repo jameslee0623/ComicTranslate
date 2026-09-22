@@ -169,6 +169,20 @@ if (!defaults || typeof defaults !== 'object') {
       failures++;
     }
   });
+
+  // The cost-safe defaults are a product requirement, not an accident: a fresh
+  // install must never be able to spend money or hit a hard quota before the
+  // user has opted in. Guard them so a later edit cannot quietly undo that.
+  if (defaults.engineId !== 'lens') {
+    print('  FAIL DEFAULTS.engineId must stay "lens" - the only free, keyless, ' +
+          'quota-free engine; got ' + JSON.stringify(defaults.engineId));
+    failures++;
+  }
+  if (!(defaults.minImageSize >= 400)) {
+    print('  FAIL DEFAULTS.minImageSize must filter thumbnail grids (>= 400px); got ' +
+          defaults.minImageSize);
+    failures++;
+  }
 }
 
 print('');

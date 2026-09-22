@@ -41,10 +41,10 @@
 
           <label for="laraModel">Text-removal model (full-image engine only)</label>
           <select id="laraModel">
-            <option value="overlay">Overlay — translation over the original (cheapest)</option>
-            <option value="inpainting">Inpainting — remove text, rebuild background</option>
-            <option value="generative_fast">Generative fast — redraws the page</option>
-            <option value="generative">Generative — highest quality, slowest</option>
+            <option value="overlay">Overlay — text drawn over the original; original text stays</option>
+            <option value="inpainting">Inpainting — removes the text, rebuilds the background (recommended)</option>
+            <option value="generative_fast">Generative fast — redraws the page, quicker</option>
+            <option value="generative">Generative — redraws the page, highest quality</option>
           </select>
         </div>
         <p class="muted small">
@@ -55,6 +55,9 @@
           “Lens OCR + Lara text” engine bills only the characters actually sent
           — a manga page is usually 500–1,500 — so the same allowance covers
           roughly 10–20 pages. Cached pages are always free.
+          All four image modes bill the same flat 10,000 per image, so the model
+          is a quality/speed choice, not a cost one: only <em>inpainting</em>
+          removes the original text, which is what makes a comic read cleanly.
           Requests are sent with X-No-Trace, so Lara neither stores nor trains
           on your images.
           <a href="https://app.laratranslate.com/account/credentials"

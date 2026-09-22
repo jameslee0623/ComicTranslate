@@ -105,6 +105,18 @@ translating would let one rate-limit response silently skip a panel forever. So
 transport failures are retried (bounded at 2 attempts), while "OCR found no text"
 is treated as final — retrying that would just re-upload the image for nothing.
 
+**Defaults are the cost-safe ones.** A fresh install uses the free Lens engine
+(no key, no quota, no bill) and ignores images under 600px, so thumbnail grids,
+icons and avatars are never uploaded. The paid engines stay strictly opt-in:
+the Lara image engine bills a flat 10,000 characters per picture — the entire
+monthly API allowance of the free plan — and 40 pages is ~400,000 characters.
+
+**A quota rejection stops the run.** 402/429 is terminal, not transient, so the
+queue breaks on the first one instead of making a refused request for every
+remaining image (and re-uploading it to Google on the OCR route). It stays
+stopped until settings change or you press **Translate now**, so topping up
+takes effect immediately without re-firing doomed calls on every page mutation.
+
 ## Engine abstraction
 
 `engines.js` defines the contract; nothing else imports a provider directly.
@@ -159,7 +171,7 @@ The returned JWT is reused until 5 s before expiry, refreshed via
 | | |
 |---|---|
 | **Cost** | 10,000 characters per image: ≈ 1 page/month on the free tier (API capped at 10k chars/mo), ≈ 50 pages/month on Pro ($9.99), ≈ $0.25/page when metered |
-| **Models** | `inpainting` (default — removes text, rebuilds the background) · `overlay` (cheapest, text drawn over the original) · `generative` / `generative_fast` (redraws the page) |
+| **Models** | `inpainting` (default — removes the original text and rebuilds the background; the only mode that makes a comic read cleanly) · `overlay` (text drawn over the original, which stays visible) · `generative` / `generative_fast` (redraws the page). **All four bill the same flat 10,000 per image**, so this is a quality/speed choice, not a cost one |
 | **Formats** | PNG · JPEG · **WebP** · AVIF · GIF · BMP · TIFF |
 | **Languages** | full locale codes; omitting `source` enables auto-detection |
 
