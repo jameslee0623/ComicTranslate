@@ -414,6 +414,15 @@ extension works in Firefox — only translating a real page does that
 
 ## Verifying it works
 
+Before your first push from a fresh clone, activate the pre-push hook that
+keeps local-only test values off origin:
+
+```sh
+git config core.hooksPath tools/hooks
+```
+
+Then:
+
 1. Load the extension via `about:debugging#/runtime/this-firefox` → Load
    Temporary Add-on → `manifest.json`.
 2. Open a page with a comic page or manga panel, enable the extension in the
