@@ -152,6 +152,20 @@ async function pushToTab() {
 }
 
 async function refreshPageState() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  activeTab = tabs[0] || null;
+
+  if (!activeTab || !activeTab.url) {
+    els.pageState.textContent = 'No page available.';
+    els.siteToggle.hidden = true;
+    els.sitesSection.hidden = true;
+    els.pageState.className = 'muted';
+    return;
+  }
+
+  currentHost = null;
+  try { currentHost = new URL(activeTab.url).hostname; } catch { /* privileged page */ }
+
   const data = await bg('CT_GET_SETTINGS');
   settings = data.settings;
   engines = data.engines;
@@ -162,8 +176,6 @@ async function refreshPageState() {
 
   // Sites section: mirrors CTSettings.isAllowedOn so the popup always agrees
   // with what the content script actually decided.
-  currentHost = null;
-  try { currentHost = new URL(activeTab.url).hostname; } catch (e) { /* privileged page */ }
   const listed = !!currentHost && (settings.domains || []).some(
     (d) => currentHost === d || currentHost.endsWith('.' + d)
   );
@@ -205,27 +217,17 @@ async function refreshPageState() {
     usageEl.hidden = true;
   }
 
-  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-  activeTab = tabs[0];
-
-  if (!activeTab || !activeTab.url) {
-    els.pageState.textContent = 'No page available.';
-    return;
-  }
-  let host = '';
-  try { host = new URL(activeTab.url).hostname; } catch { /* privileged page */ }
-
   const check = await bg('CT_CHECK_PAGE', { url: activeTab.url });
   const isHttp = /^https?:/i.test(activeTab.url);
   if (!isHttp) {
     els.pageState.textContent = 'Not a web page — nothing to translate here.';
     els.pageState.className = 'muted warn';
   } else if (check.allowed) {
-    els.pageState.textContent = 'Active on ' + host;
+    els.pageState.textContent = 'Active on ' + currentHost;
     els.pageState.className = 'muted';
   } else {
     els.pageState.textContent = settings.enabled
-      ? 'Excluded on ' + host + ' (see Settings).'
+      ? 'Excluded on ' + currentHost + ' (see Settings).'
       : 'Paused — turn on Enabled to start.';
     els.pageState.className = 'muted';
   }
