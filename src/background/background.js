@@ -19,7 +19,7 @@ if (typeof importScripts === 'function') {
     importScripts('../shared/compat.js', '../shared/codec.js',
                   'settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js');
+                  'laraEngine.js', 'lensLaraEngine.js', 'localImageEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -190,6 +190,26 @@ async function handle(msg, sender) {
       CTLaraEngine.resetAuth();
       const bearer = await CTLaraEngine.ensureToken(settings);
       return { ok: true, expiresAt: CTLaraEngine.tokenExpiry(bearer) || 0 };
+    }
+
+    case 'CT_LOCAL_IMAGE_PROBE': {
+      // Free connectivity check against the user's own server: validates the
+      // URL shape without sending any image. The server answers GET with any
+      // 2xx/4xx to prove it is alive (a 404 on /translate-image still means a
+      // live server that only accepts POST).
+      const endpoint = CTLocalImageEngine.requireEndpoint(settings);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(endpoint,
+          { method: 'GET', signal: ctrl.signal });
+        return { ok: true, status: res.status };
+      } catch (e) {
+        throw new Error('Cannot reach the local server at ' + endpoint +
+          ' (' + (e && e.name === 'AbortError' ? 'timed out' : 'is it running?') + ').');
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     default:

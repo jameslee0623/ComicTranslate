@@ -117,6 +117,14 @@ globalThis.browser = {
     onChanged: { addListener: function () {} }
   }
 };
+// localImageEngine.js needs FormData/Blob/URL/AbortController at load time.
+globalThis.FormData = function () {
+  this.fields = {};
+  this.append = function (k, v, f) { this.fields[k] = { value: v, file: f }; };
+};
+globalThis.Blob = function (parts, opts) {
+  this.parts = parts; this.type = (opts && opts.type) || '';
+};
 
 function jsonReply(status, body, headers) {
   return {
@@ -160,6 +168,9 @@ src = readFile('src/background/laraEngine.js');
 (0, eval)(src);
 if (typeof CTLaraEngine === 'undefined') throw new Error('CTLaraEngine did not load');
 if (typeof CTUsage === 'undefined') throw new Error('CTUsage did not load');
+src = readFile('src/background/localImageEngine.js');
+(0, eval)(src);
+if (typeof CTLocalImageEngine === 'undefined') throw new Error('CTLocalImageEngine did not load');
 
 var settings = {
   laraAccessKeyId: 'id',
@@ -421,6 +432,60 @@ async function main() {
   snap = await CTUsage.reset();
   check('usage: reset clears everything',
         snap.textChars === 0 && snap.imageCount === 0 && snap.totalChars === 0);
+
+  // ── local image engine (self-hosted, Lara-image style) ────────────────
+  var threwLocal = null;
+  try { CTLocalImageEngine.requireEndpoint({}); } catch (e) { threwLocal = e; }
+  check('local: empty URL throws with guidance',
+        !!threwLocal && /server URL/i.test(threwLocal.message));
+  threwLocal = null;
+  try { CTLocalImageEngine.requireEndpoint({ localImageUrl: 'ftp://x/y' }); }
+  catch (e) { threwLocal = e; }
+  check('local: non-http(s) rejected', !!threwLocal && /http/i.test(threwLocal.message));
+  eq('local: bare host gets default path',
+      CTLocalImageEngine.requireEndpoint({ localImageUrl: 'http://localhost:8000' }),
+      'http://localhost:8000/translate-image');
+  eq('local: explicit path kept',
+      CTLocalImageEngine.requireEndpoint({ localImageUrl: 'http://localhost:8000/custom' }),
+      'http://localhost:8000/custom');
+  eq('local: free engine bills nothing', CTLocalImageEngine.free, true);
+  eq('local: needs no key', CTLocalImageEngine.needsKey, false);
+
+  // binary image response passes through untouched
+  var binRes = imageReply(200, new Uint8Array([1, 2, 3]).buffer, 'image/png');
+  var parsed = await CTLocalImageEngine.parseImageResponse(binRes);
+  check('local: binary response bytes',
+        parsed.bytes.length === 3 && parsed.bytes[0] === 1);
+  // JSON base64 response decodes ('aGk=' is 'hi')
+  var jsonRes = {
+    ok: true, status: 200,
+    headers: { get: function () { return 'application/json'; } },
+    json: function () { return Promise.resolve({ image: 'aGk=', mime: 'image/png' }); }
+  };
+  parsed = await CTLocalImageEngine.parseImageResponse(jsonRes);
+  eq('local: json base64 decodes', bytesToString(parsed.bytes), 'hi');
+  // JSON data-URI response unwraps the mime too
+  var uriRes = {
+    ok: true, status: 200,
+    headers: { get: function () { return 'application/json'; } },
+    json: function () {
+      return Promise.resolve({ image: 'data:image/jpeg;base64,aGk=' });
+    }
+  };
+  parsed = await CTLocalImageEngine.parseImageResponse(uriRes);
+  check('local: data-uri mime unwrapped',
+        parsed.mime === 'image/jpeg' && bytesToString(parsed.bytes) === 'hi');
+  // JSON error shape (no image field) surfaces the server message
+  var errRes = {
+    ok: true, status: 200,
+    headers: { get: function () { return 'application/json'; } },
+    json: function () { return Promise.resolve({ message: 'no GPU today' }); }
+  };
+  var threwErr = null;
+  try { await CTLocalImageEngine.parseImageResponse(errRes); }
+  catch (e) { threwErr = e; }
+  check('local: error JSON surfaces message',
+        !!threwErr && /no GPU today/.test(threwErr.message));
 
   print('');
   if (failed) {

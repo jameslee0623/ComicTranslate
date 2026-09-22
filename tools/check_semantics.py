@@ -61,7 +61,8 @@ settings_src = open("src/background/settings.js").read()
 for key in ["renderMode", "scanBackgrounds", "textStroke", "fontFamily", "minImageSize",
             "maxImagesPerPage", "requestDelayMs", "cacheTtlDays", "domainMode", "domains",
             "debug", "engineId", "sourceLang", "targetLang", "enabled",
-            "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap"]:
+            "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap",
+            "localImageUrl", "localImageApiKey"]:
     if not re.search(r"\b" + key + r"\s*:", settings_src):
         fail("settings.js DEFAULTS is missing key: " + key)
 

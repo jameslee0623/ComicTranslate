@@ -91,6 +91,11 @@ if (typeof globalThis.CTSettings === 'undefined') {
      */
     laraAccessKeyId: '',
     laraAccessKeySecret: '',
+    /** Local server URL (local-image engine). Empty = engine unavailable. */
+    localImageUrl: '',
+    /** Optional bearer token, sent only to the user's own URL above. */
+    localImageApiKey: '',
+
     /** Text-removal model: overlay | inpainting | generative | generative_fast. */
     laraModel: 'inpainting',
 

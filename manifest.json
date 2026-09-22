@@ -32,6 +32,7 @@
       "src/background/lensEngine.js",
       "src/background/laraEngine.js",
       "src/background/lensLaraEngine.js",
+      "src/background/localImageEngine.js",
       "src/background/engines.js",
       "src/background/background.js"
     ]

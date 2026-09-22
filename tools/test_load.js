@@ -34,6 +34,10 @@ globalThis.MutationObserver = function () { this.observe = noop; this.disconnect
 globalThis.ResizeObserver = function () { this.observe = noop; this.disconnect = noop; };
 globalThis.Image = function () {};
 globalThis.btoa = function () { return ''; };
+globalThis.atob = function (s) { return ''; };
+globalThis.FormData = function () { this.append = noop; };
+globalThis.Blob = function () {};
+globalThis.AbortController = function () { this.signal = {}; this.abort = noop; };
 if (!globalThis.URL) globalThis.URL = function () {};
 if (!globalThis.URL.createObjectURL) globalThis.URL.createObjectURL = function () { return 'blob:x'; };
 if (!globalThis.URL.revokeObjectURL) globalThis.URL.revokeObjectURL = noop;
@@ -82,7 +86,7 @@ globalThis.browser = {
 var SHARED = ['compat.js', 'codec.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js', 'background.js'];
+                  'laraEngine.js', 'lensLaraEngine.js', 'localImageEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -132,6 +136,8 @@ var EXPECTED = {
                 'rescaleRegions', 'boxToPixels', 'collectWordsDeep'],
   CTLensEngine: ['imageToRegions', 'toUploadable', 'log'],
   CTLensLaraEngine: ['imageToRegions', 'log'],
+  CTLocalImageEngine: ['requireEndpoint', 'extFromMime', 'parseImageResponse',
+                 'imageToRegions', 'log'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'isQuotaError',
                  'imageToRegions'],

@@ -141,8 +141,10 @@ if (typeof globalThis.CTEngines === 'undefined') {
     // regions; it is cached like any other result, so repeat views stay free.
     if (result.image && result.image.bytes) {
       payload.image = { bytes: result.image.bytes, mime: result.image.mime || 'image/png' };
-      // The image engine bills a flat 10,000 characters per successful call.
-      if (globalThis.CTUsage) await CTUsage.addImage();
+      // The Lara image engine bills a flat 10,000 characters per successful
+      // call. Local/self-hosted engines bill nothing, so engines opt out
+      // with `free: true`.
+      if (globalThis.CTUsage && !engine.free) await CTUsage.addImage();
     }
 
     if ((payload.image || payload.regions.length) && settings.cacheTtlDays > 0) {
@@ -167,6 +169,7 @@ if (typeof globalThis.CTEngines === 'undefined') {
   register(CTLensEngine);
   register(CTLaraEngine);
   register(CTLensLaraEngine);
+  register(CTLocalImageEngine);
 
   globalThis.CTEngines = { register, get, list, translateImage, normaliseRegion };
 }

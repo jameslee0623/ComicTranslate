@@ -11,7 +11,8 @@ const FIELDS = [
   'sourceLang', 'targetLang', 'engineId', 'fontFamily',
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
-  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap'
+  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap',
+  'localImageUrl', 'localImageApiKey'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -71,11 +72,16 @@ function fillEngines(engines, selected) {
             'covers roughly 10-20 pages. Same Lara credentials below.'
           : current.needsKey
             ? 'This engine needs an API key before it will work.'
-            : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
-              'without notice.')
+            : current.id === 'local-image'
+              ? 'Sends page images to the server URL below (your machine only) and ' +
+                'shows the translated bitmap it returns. Needs no key; enter ' +
+                'the URL, then use "Test local server".'
+              : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
+                'without notice.')
     : '';
   el('lara-fields').hidden = !(current &&
     (current.id === 'lara' || current.id === 'lens-lara'));
+  el('local-image-fields').hidden = !(current && current.id === 'local-image');
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */
@@ -115,6 +121,8 @@ async function load() {
   el('laraAccessKeySecret').value = s.laraAccessKeySecret || '';
   el('laraModel').value = s.laraModel || 'inpainting';
   el('laraMonthlyCap').value = s.laraMonthlyCap || 10000;
+  el('localImageUrl').value = s.localImageUrl || '';
+  el('localImageApiKey').value = s.localImageApiKey || '';
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
   renderUsage();
 }
@@ -186,6 +194,31 @@ el('lara-probe').addEventListener('click', async () => {
     const data = await bg('CT_LARA_PROBE');
     const when = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'unknown';
     note.textContent = 'Credentials accepted. Token expires ' + when + '.';
+  } catch (e) {
+    note.textContent = 'Failed: ' + e.message;
+  }
+});
+
+el('engineId').addEventListener('change', () => {
+  // Re-render the engine note + field visibility without waiting for a reload:
+  // the select already holds the new id, so rebuild from the last-known list.
+  save({ engineId: el('engineId').value }).then((s) => {
+    bg('CT_GET_SETTINGS').then((data) => fillEngines(data.engines, s.engineId))
+      .catch(() => {});
+  });
+});
+
+el('local-image-probe').addEventListener('click', async () => {
+  const note = el('local-image-probe-result');
+  note.textContent = 'Checking…';
+  try {
+    // Save first: the probe connects to whatever URL is in the field now,
+    // without sending any image.
+    await save({ localImageUrl: el('localImageUrl').value.trim() });
+    const data = await bg('CT_LOCAL_IMAGE_PROBE');
+    note.textContent = data.status === 404
+      ? 'Server is reachable (returned 404 on GET — it likely only accepts POST, which is fine).'
+      : 'Server is reachable (HTTP ' + data.status + ').';
   } catch (e) {
     note.textContent = 'Failed: ' + e.message;
   }
