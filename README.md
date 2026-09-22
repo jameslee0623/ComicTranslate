@@ -358,7 +358,7 @@ unhelpful generic one.
 ./tools/verify.sh
 ```
 
-Six stages, all runnable without Node or a browser:
+Seven stages, all runnable without Node or a browser:
 
 1. **Syntax** — every JS file is parsed with JavaScriptCore (`jsc`).
 2. **Load** — every module is actually *evaluated* against stubbed browser
@@ -378,6 +378,11 @@ Six stages, all runnable without Node or a browser:
    JSON** (the regression the codec exists to prevent), and `CTCompat` aliases
    a Chrome-shaped environment correctly in background, content and page
    contexts.
+7. **Privacy** — values declared in the gitignored `tools/local_only.txt`
+   (local-only test values) must never appear on any ref already pushed to
+   origin. The guard file itself is untracked, so the pushed repo carries no
+   trace of what it protects; the stage fails the moment one of the values
+   does reach a pushed ref, instead of letting a review or a stranger find it.
 
 ### Why the Load stage exists
 
