@@ -39,6 +39,31 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     if (settings && settings.debug) console.log('[CT/lara]', ...args);
   }
 
+  /**
+   * Quota exhaustion is TERMINAL for a whole run, not just for one call: every
+   * later request would be refused too. Callers therefore have to be able to
+   * tell it apart from a transient failure and stop, instead of burning through
+   * a 40-image queue making 40 doomed requests (and, for the OCR route, 40
+   * pointless image uploads).
+   *
+   * The figures are Lara's own, from their pricing page:
+   *   "Image Translation - 10,000 characters / image"
+   *   Free 60,000 chars/month, of which API access is 10,000
+   *   Pro  $9.99 = 500,000 chars/month
+   * So 40 pages is ~400,000 characters - which is how someone can exhaust a
+   * paid month without ever seeing it coming.
+   */
+  const QUOTA_HINT = ' Your Lara quota is exhausted: image translation bills '
+    + '10,000 characters per image, and text translation bills the characters '
+    + 'actually sent. Switch to the Google Lens engine in Settings, or wait for '
+    + 'the quota to reset.';
+
+  /** 402/429, or any body that names the quota. Exported for tests. */
+  function isQuotaError(status, detail) {
+    if (status === 402 || status === 429) return true;
+    return /quota|exceeded/i.test(String(detail || ''));
+  }
+
   // ── auth primitives ────────────────────────────────────────────────────────
 
   /** btoa(String.fromCharCode(...)) chokes on large arrays; chunk it. */
@@ -325,8 +350,10 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
         const data = await res.json();
         if (data && data.message) detail += ': ' + data.message;
       } catch { /* binary or empty error body */ }
-      throw new Error('Lara image translation failed (' + detail + '). ' +
-        'Each image bills ~10,000 characters against your plan.');
+      throw new Error('Lara image translation failed (' + detail + ').' +
+        (isQuotaError(res.status, detail)
+          ? QUOTA_HINT
+          : ' Each image bills 10,000 characters against your plan.'));
     }
 
     const outBytes = await res.arrayBuffer();
@@ -399,9 +426,9 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
         const data = await res.json();
         if (data && data.message) detail += ': ' + data.message;
       } catch { /* empty error body */ }
-      const quota = res.status === 402 || res.status === 429;
-      throw new Error('Lara text translation failed (' + detail + ')' +
-        (quota ? '. On the free tier the API cap is 10,000 characters per month.' : ''));
+      const quota = isQuotaError(res.status, detail);
+      throw new Error('Lara text translation failed (' + detail + ').' +
+        (quota ? QUOTA_HINT : ''));
     }
 
     const raw = await res.text();
@@ -457,6 +484,8 @@ if (typeof globalThis.CTLaraEngine === 'undefined') {
     extFromMime,
     translateTexts,
     resetAuth,
+    isQuotaError,
+    QUOTA_HINT,
     log,
     imageToRegions
   };

@@ -371,6 +371,19 @@ async function main() {
   check('translateTexts: quota error carries the free-tier hint',
         !!threw3 && /quota exceeded/.test(threw3.message) && /10,000/.test(threw3.message));
 
+  // Quota classification. The caller has to be able to tell a TERMINAL quota
+  // rejection (stop the whole run) from a transient failure (retry the image),
+  // otherwise it fires a doomed request for every remaining image.
+  check('isQuotaError: 402 is quota', CTLaraEngine.isQuotaError(402, '') === true);
+  check('isQuotaError: 429 is quota', CTLaraEngine.isQuotaError(429, '') === true);
+  check('isQuotaError: 400 is NOT quota',
+        CTLaraEngine.isQuotaError(400, 'bad request') === false);
+  check('isQuotaError: a body naming the quota counts',
+        CTLaraEngine.isQuotaError(200, 'api_translation_chars quota exceeded') === true);
+  check('quota hint states the real billing rule and an exit route',
+        /10,000/.test(CTLaraEngine.QUOTA_HINT) &&
+        /Google Lens/.test(CTLaraEngine.QUOTA_HINT));
+
   // ── usage meter (free tier: 10,000 chars/month) ───────────────────────────
   eq('usage: monthKey format', CTUsage.monthKey(new Date(2026, 0, 5)), '2026-01');
   // start from a clean slate: earlier tests in this file billed chars.

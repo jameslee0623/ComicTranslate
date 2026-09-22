@@ -61,11 +61,14 @@ function fillEngines(engines, selected) {
   const current = engines.find((e) => e.id === selected);
   el('engine-note').textContent = current
     ? (current.id === 'lara'
-        ? 'Paid API. Enter your credentials below, then use "Test Lara credentials".'
+        ? 'Paid API, official and stable. Each image bills a FLAT 10,000 characters, ' +
+          'so Pro (500,000/month) covers about 50 pages - watch the usage panel ' +
+          'below. Enter credentials, then use "Test Lara credentials".'
         : current.id === 'lens-lara'
           ? 'Free anonymous Lens OCR finds the boxes; only the text goes to Lara, ' +
-            'billed by real characters — the free tier (10,000 chars/month) covers ' +
-            'roughly 10–20 manga pages. Same Lara credentials below.'
+            'billed by the characters actually sent (a manga page is usually ' +
+            '500-1,500) - so the 10,000 chars/month of API access on the free plan ' +
+            'covers roughly 10-20 pages. Same Lara credentials below.'
           : current.needsKey
             ? 'This engine needs an API key before it will work.'
             : 'No API key needed. Uses an undocumented Google endpoint that can change ' +

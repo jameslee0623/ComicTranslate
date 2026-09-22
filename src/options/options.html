@@ -49,10 +49,12 @@
         </div>
         <p class="muted small">
           Lara meters usage in characters, two different ways. The full-image
-          engine bills 10,000 characters per image — about one page a month on
-          the free tier. The “Lens OCR + Lara text” engine bills the real
-          characters sent — a manga page is usually 500–1,500 — so the free
-          tier covers roughly 10–20 pages. Cached pages are always free.
+          engine bills a FLAT 10,000 characters per image, so 40 pages is about
+          400,000 characters — enough to exhaust a Pro month (500,000) and far
+          beyond the 10,000 chars/month of API access on the Free plan. The
+          “Lens OCR + Lara text” engine bills only the characters actually sent
+          — a manga page is usually 500–1,500 — so the same allowance covers
+          roughly 10–20 pages. Cached pages are always free.
           Requests are sent with X-No-Trace, so Lara neither stores nor trains
           on your images.
           <a href="https://app.laratranslate.com/account/credentials"
@@ -142,7 +144,9 @@
         characters actually sent; the full-image engine bills a flat 10,000 per
         image. Lara's own reset day is account-specific and unknowable here, so
         the counter follows the calendar month and a manual reset is provided.
-        Free tier: 10,000 chars/month.
+        Free plan: 10,000 chars/month of API access; Pro: 500,000. One image
+        costs 10,000, so the full-image engine empties the Free allowance in a
+        single page.
       </p>
       <div id="ct-usage-bar"><div id="ct-usage-fill"></div></div>
       <p id="ct-usage-text" class="muted small">Loading…</p>

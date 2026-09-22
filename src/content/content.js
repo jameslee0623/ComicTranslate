@@ -21,6 +21,19 @@
    *  nothing, which is exactly how a dead engine can seem healthy. */
   let lastError = null;
 
+  /**
+   * Set when the engine reports the account is out of quota. Every further
+   * request would be refused too, so the queue stops instead of making 40 more
+   * doomed calls (and, on the OCR route, 40 pointless image uploads). Cleared by
+   * a settings change or an explicit "Translate now", so topping up works.
+   */
+  let quotaStopped = false;
+
+  /** A quota rejection is terminal for the run; a bare 429 is enough. */
+  function isQuotaFailure(message) {
+    return /quota|exceeded|429/i.test(String(message || ''));
+  }
+
   function log(...args) {
     if (settings && settings.debug) console.log('[CT/content]', ...args);
   }
@@ -108,6 +121,17 @@
     if (!lastUsage || !(lastUsage.totalChars > 0)) return '';
     const cap = (settings && settings.laraMonthlyCap) || 10000;
     return ' · ' + fmtChars(lastUsage.totalChars) + ' / ' + fmtChars(cap) + ' chars';
+  }
+
+  /**
+   * Lara bills image translation a FLAT 10,000 characters per image, so the cost
+   * of a page is knowable before the first upload. Showing it up front is the
+   * difference between an informed choice and discovering the quota is gone
+   * 40 images later.
+   */
+  function projectedCost(count) {
+    if (!settings || settings.engineId !== 'lara' || count < 1) return '';
+    return ' · ~' + fmtChars(count * 10000) + ' chars (' + count + ' \u00d7 10k)';
   }
 
   function ensureChip() {
@@ -260,6 +284,10 @@
 
   async function runQueue() {
     if (running) { queued = true; return; }
+    // Do not re-fire doomed requests on every DOM mutation: once the engine has
+    // said the quota is gone, only a settings change or an explicit "Translate
+    // now" can unblock it.
+    if (quotaStopped) return;
     running = true;
     try {
       do {
@@ -273,7 +301,8 @@
         }).filter((c) => !CTImageScanner.hasSeen(c.el) && attemptCount(c.el) < MAX_ATTEMPTS);
 
         if (candidates.length) {
-          chipText('Translating… 0/' + candidates.length + usageSuffix());
+          chipText('Translating… 0/' + candidates.length +
+                   projectedCost(candidates.length) + usageSuffix());
         }
 
         let runIndex = 0;
@@ -295,6 +324,13 @@
             lastError = e.message;
             recordTransportFailure(candidate.el);
             log('failed', candidate.url.slice(0, 120), e.message);
+            if (isQuotaFailure(e.message)) {
+              // Terminal for this run: repeating a refused request for every
+              // remaining image wastes 39 round-trips and 39 uploads.
+              quotaStopped = true;
+              log('quota exhausted - stopping this run');
+              break;
+            }
           }
 
           // Pace ourselves: the Lens engine drives a shared tab, and hammering
@@ -305,11 +341,15 @@
         if (candidates.length) {
           // Never report a bare "Done" over a silent failure: that is what makes
           // a completely dead engine look like a working one.
-          chipText((firstFailure
-            ? 'Failed: ' + shorten(firstFailure)
-            : (settings.enabled ? 'Done' : 'Paused') + ' · ' +
-              runIndex + '/' + candidates.length + ' images') + usageSuffix());
-          chipHideTimer = setTimeout(hideChip, firstFailure ? 20000 : 3200);
+          const text = quotaStopped
+            ? 'Stopped (quota): ' + shorten(firstFailure)
+            : firstFailure
+              ? 'Failed: ' + shorten(firstFailure)
+              : (settings.enabled ? 'Done' : 'Paused') + ' · ' +
+                runIndex + '/' + candidates.length + ' images';
+          chipText(text + usageSuffix());
+          chipHideTimer = setTimeout(hideChip,
+            (firstFailure || quotaStopped) ? 20000 : 3200);
         }
       } while (queued);
     } finally {
@@ -375,6 +415,9 @@
     const previous = settings;
     const wasEnabled = !!(previous && previous.enabled);
     settings = next;
+    // A settings change is the user's chance to fix a quota problem (switch
+    // engine, raise the cap, top up), so give the queue another go.
+    quotaStopped = false;
 
     // A different language, engine or placement makes every existing
     // translation stale, so the page is restored and the images become eligible
@@ -425,10 +468,14 @@
           translated: CTReplace.count(),
           running,
           lastError,
+          quotaStopped,
           hasObserver: !!observer
         });
 
       case 'CT_SCAN_NOW':
+        // An explicit user request clears a previous quota stop: they may have
+        // topped up, and refusing to even try would be worse than one 429.
+        quotaStopped = false;
         runQueue();
         return Promise.resolve({ started: true });
 

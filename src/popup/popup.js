@@ -63,6 +63,7 @@ function setStatus(text) {
 function pageSummary(status) {
   return `On this page: ${status.translated} translated, ` +
          `${status.stats.failed} failed, ${status.stats.skipped} skipped.` +
+         (status.quotaStopped ? ' Stopped: Lara quota exhausted.' : '') +
          (status.lastError ? ' Last error: ' + status.lastError : '');
 }
 
@@ -87,9 +88,21 @@ function fillEngines(selected) {
     els.engineId.appendChild(opt);
   }
   const current = engines.find((e) => e.id === els.engineId.value);
+  // State the billing rule at SELECTION time. "10,000 characters per image" is
+  // knowable up front, and it is exactly what silently empties a monthly quota:
+  // 40 pages is ~400,000 characters, which is most of a Pro month.
+  const NOTES = {
+    lara: 'Official API. Each image bills a flat 10,000 characters, so 40 pages ' +
+          'is ~400,000 - most of a Pro month. Needs credentials in Settings.',
+    'lens-lara': 'Official API, text only, billed per character sent (a page is ' +
+                 'usually 500-1,500). Needs credentials in Settings.',
+    lens: 'No API key required. Undocumented Google endpoint that can change ' +
+          'without notice.'
+  };
   els.engineNote.textContent = current
-    ? (current.needsKey ? 'Requires an API key (see Settings).'
-                        : 'No API key required. Undocumented Google endpoint.')
+    ? (NOTES[current.id] || (current.needsKey
+        ? 'Requires an API key (see Settings).'
+        : 'No API key required.'))
     : '';
 }
 
