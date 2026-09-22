@@ -1,16 +1,94 @@
 # ComicTranslate
 
-A Firefox extension that finds images and comics on a page, translates the text
-*inside* them, and swaps the picture for a translated version.
+A browser extension for **Firefox and Chrome** that translates the text inside
+pictures — comics, manga, webtoons — right on the page: it finds the images,
+reads the lettering, translates it, erases the original text and draws the
+translation in its place.
 
-**Status:** working extension. The full pipeline, engine abstraction, renderer and
-UI are implemented and load in Firefox. Three engines are available: anonymous
-Google Lens OCR, Lara's official image API, and Lens OCR combined with Lara
-text translation — see [Engines](#lara-translate-engine-official-paid).
+## What it does
+
+1. **Detect** — scans the page for real content images (icons, avatars and
+   thumbnail grids are skipped; anything under 600px is ignored by default).
+2. **Read** — sends each image for OCR and gets back every text line with its
+   exact position and the detected language.
+3. **Translate** — the detected text is translated into your target language.
+4. **Redraw** — the original text is painted over and the translation is
+   typeset into the same speech bubbles and captions.
+5. **Replace** — the page now shows the translated picture. Nothing is
+   uploaded anywhere by the extension itself except the image going to the
+   translation engine you chose.
+
+While it works, the toolbar icon animates and a small progress chip on the page
+shows `Translating… 3/12` (plus Lara usage where it applies). Every translated
+image is cached, so re-reading a page costs nothing and is instant.
+
+## Installing
+
+### Firefox
+
+No build step.
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. **Load Temporary Add-on…** → select `manifest.json` from this folder
+3. **Reload any page you want to translate.** Content scripts attach when a
+   page loads, so a tab that was already open has no translator in it yet.
+
+### Chrome
+
+Chrome cannot use the Firefox manifest shape, so a one-file build step produces
+`dist/chrome` (Python 3 required, Node is **not**):
+
+```bash
+python3 tools/build.py        # writes dist/firefox and dist/chrome
+```
+
+1. Open `chrome://extensions`
+2. Toggle **Developer mode** (top right)
+3. **Load unpacked** → select the **`dist/chrome` folder** (never the repo
+   root — Chrome rejects the source manifest outright)
+4. Reload the page you want to translate; after any rebuild, press Reload ↻ on
+   the extension card and reload the page again.
+
+### Turning it on
+
+The popup switch is **on by default**, but a fresh install translates **only
+sites on its list** ("Sites apply to: only the list"). Open the popup on a site
+you want translated and press **Add this site** — that's it.
+
+## The three translation engines
+
+| Engine | Cost | Needs an account? | What you get |
+|---|---|---|---|
+| **Google Lens (free)** | free | no — anonymous | OCR + translation in two anonymous calls, typeset locally |
+| **Lens + Lara text** | billed per character actually sent | yes — Lara free tier | Google's OCR boxes, Lara's translation quality |
+| **Lara image (official)** | flat 10,000 characters per image | yes — Lara | Lara's server renders the whole translated image; best visual quality |
+
+### How many pages can you translate for free?
+
+- **Google Lens: unlimited.** It is free and anonymous — no account, no quota,
+  no billing. This is the default engine.
+- **Lens + Lara text:** Lara's free plan includes 60,000 characters/month, of
+  which **10,000 are usable through the API**. A comic page is typically
+  500–1,500 characters, so that is roughly **7–20 pages per month** free.
+- **Lara image:** every image bills a **flat 10,000 characters** regardless of
+  how much text it contains. The free allowance covers **about 1 page/month**;
+  the paid Pro plan (500,000/month) covers **about 50 pages/month**. Fine for
+  occasional use, expensive for binge-reading — prefer Lens or Lens + Lara text
+  for volume.
+
+The popup shows a live usage meter for the Lara engines (`Lara this month: X /
+10,000 chars`), and a quota rejection stops the run immediately instead of
+hammering the API for every image on the page.
+
+**Engines in detail** — including how the free engine works without an account
+and what the Lara API does — are documented under
+[Engine abstraction](#engine-abstraction) below.
 
 ---
 
-## The important correction to the original idea
+## Developer documentation
+
+### The important correction to the original idea
 
 The request was "send the picture to Google Translate Images and use the
 translated picture it returns". **That is not how it works**, and it is worth
@@ -214,52 +292,21 @@ same locally-painted output as the Lens engine.
   counter follows the calendar month — Lara's own reset day is account-specific
   — so the options page has a manual reset button.
 
-## Loading it in Firefox
+### Firefox install notes
 
-Node is **not** required — there is no build step. All scripts are classic,
-load-order dependent, and every file is cross-checked for syntax and internal
-consistency.
-
-1. Open `about:debugging#/runtime/this-firefox`
-2. **Load Temporary Add-on…**
-3. Select `/Users/james/FirefoxDev/ComicTranslate/manifest.json`
-4. **Reload every page you want to translate.** Content scripts are injected when
-   a page loads, so a tab that was already open when you loaded or reloaded the
-   extension has no content script in it, and every message to it will fail.
-5. After editing files, press **Reload** on the extension card, then reload the
-   page again.
+Firefox loads the **repo root** `manifest.json` directly — no build step. That
+is the opposite of Chrome, which must load `dist/chrome`; the build exists
+because the two browsers cannot share one manifest shape.
 
 Turn on `debug` in the options page, then watch the **Browser Console**
 (`Cmd+Shift+J`) for `[CT]` and `[CT/lens]` lines.
 
-Firefox loads the **repo root** `manifest.json` directly — no build step. That
-is the opposite of Chrome, which must load `dist/chrome` (next section); the
-build exists because the two browsers cannot share one manifest shape.
-
-## Loading it in Chrome
+### Chrome install notes and logs
 
 **Chrome must load `dist/chrome`, never the repo root.** The root
 `manifest.json` is the Firefox source shape — Chrome rejects it outright
 because of `background.scripts`, and the error Chrome shows for that is an
-unhelpful generic one. If you pointed Chrome at the repo root, that is the
-whole problem; run the build and load `dist/chrome` instead.
-
-Node is **not** required, but Python 3 is (it only writes files):
-
-```bash
-python3 tools/build.py           # both targets, into dist/
-python3 tools/build.py --chrome  # just dist/chrome
-python3 tools/build.py --firefox # just dist/firefox (identical copy of the tree)
-```
-
-Then in Chrome:
-
-1. Open `chrome://extensions`
-2. Toggle **Developer mode** (top right)
-3. **Load unpacked** → select the **`dist/chrome` folder** (not the repo root)
-4. After rebuilding (`python3 tools/build.py`), press the **Reload** ↻ on the
-   ComicTranslate card, then reload the page you are translating — same rule
-   as Firefox: content scripts only inject on page load.
+unhelpful generic one.
 
 ### Where the logs are in Chrome
 

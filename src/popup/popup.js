@@ -12,7 +12,9 @@ const els = {
   targetLang: document.getElementById('targetLang'),
   engineId: document.getElementById('engineId'),
   engineNote: document.getElementById('engine-note'),
-  renderMode: document.getElementById('renderMode'),
+  sitesSection: document.getElementById('sites-section'),
+  siteLabel: document.getElementById('site-label'),
+  siteToggle: document.getElementById('site-toggle'),
   scanNow: document.getElementById('scan-now'),
   restore: document.getElementById('restore'),
   status: document.getElementById('status'),
@@ -24,6 +26,7 @@ const els = {
 let settings = null;
 let engines = [];
 let activeTab = null;
+let currentHost = null;
 
 async function bg(type, payload) {
   const reply = await browser.runtime.sendMessage(Object.assign({ type }, payload));
@@ -128,7 +131,33 @@ async function refreshPageState() {
   fillLanguages(settings.targetLang);
   fillEngines(settings.engineId);
   els.enabled.checked = !!settings.enabled;
-  els.renderMode.value = settings.renderMode;
+
+  // Sites section: mirrors CTSettings.isAllowedOn so the popup always agrees
+  // with what the content script actually decided.
+  currentHost = null;
+  try { currentHost = new URL(activeTab.url).hostname; } catch (e) { /* privileged page */ }
+  const listed = !!currentHost && (settings.domains || []).some(
+    (d) => currentHost === d || currentHost.endsWith('.' + d)
+  );
+  const mode = settings.domainMode;
+  els.sitesSection.hidden = !currentHost;
+  els.siteToggle.disabled = mode === 'all' || !currentHost;
+  if (currentHost) {
+    if (mode === 'all') {
+      els.siteLabel.textContent = 'All sites are translated.';
+      els.siteToggle.textContent = 'Sites list is not in use';
+    } else if (mode === 'blocklist') {
+      els.siteLabel.textContent = listed
+        ? currentHost + ' is on the block list (never translated).'
+        : currentHost + ' is translated (not on the block list).';
+      els.siteToggle.textContent = listed ? 'Remove from block list' : 'Block this site';
+    } else {
+      els.siteLabel.textContent = listed
+        ? currentHost + ' is on the list (translated).'
+        : currentHost + ' is NOT on the list, so it is not translated.';
+      els.siteToggle.textContent = listed ? 'Remove from list' : 'Add this site';
+    }
+  }
 
   // Lara-billed engines get a month-to-date usage line against the cap.
   const usageEl = document.getElementById('lara-usage');
@@ -199,8 +228,18 @@ els.engineId.addEventListener('change', async () => {
   fillEngines(els.engineId.value);
 });
 
-els.renderMode.addEventListener('change', async () => {
-  await save({ renderMode: els.renderMode.value });
+els.siteToggle.addEventListener('click', async () => {
+  if (!currentHost) return;
+  const list = (settings.domains || []).slice();
+  const i = list.indexOf(currentHost);
+  if (i >= 0) list.splice(i, 1); else list.push(currentHost);
+  await save({ domains: list });
+  await refreshPageState();
+  // Re-evaluate live: adding the site starts translation here, removing it
+  // restores any translated images and stops.
+  const result = await pushToTab();
+  if (result && result.error) setStatus(result.error);
+  else setStatus('Site list updated.');
 });
 
 els.scanNow.addEventListener('click', async () => {
