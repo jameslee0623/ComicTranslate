@@ -37,9 +37,16 @@ async function toTab(type, payload) {
   try {
     return await browser.tabs.sendMessage(activeTab.id, Object.assign({ type }, payload));
   } catch (e) {
-    // The overwhelmingly common cause is that the page was already open when the
-    // extension was loaded or reloaded; content scripts only run on page load.
-    throw new Error('Reload the page (F5), then try again. (' + e.message + ')');
+    // Two very different causes produce this exact message, and they need
+    // different fixes:
+    //   1. the page was open before the extension loaded or reloaded, so no
+    //      content script is attached yet -> reload the page;
+    //   2. a content-script file failed to load on EVERY page (a syntax error,
+    //      or a throw at load time), so onMessage never registers at all.
+    //      Reloading cannot help - the page console names the offending file.
+    throw new Error('No content script on this page. Reload the page (F5). If that '
+      + 'does not help, a content-script file failed to load - check the page '
+      + 'console. (' + e.message + ')');
   }
 }
 

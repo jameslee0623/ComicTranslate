@@ -73,22 +73,32 @@ if (typeof globalThis.CTReplace === 'undefined') {
         remember(el, { kind, translated: true, blobUrl: url });
         return { mode: 'replace', ok: true };
       }
-      // Decoded to nothing: most likely the page's img-src policy refused the
-      // blob URL. Roll back and use the CSP-immune canvas overlay instead.
+      // Decoded to nothing: either the page's img-src policy refused the blob
+      // URL, or the bytes are not a decodable image. Fall back to the
+      // CSP-immune canvas overlay. The blob URL must stay ALIVE until the
+      // canvas has decoded it - revoking first produces a decode failure that
+      // is indistinguishable from a CSP block.
+      const canvas = await urlToCanvas(url).catch(() => null);
       URL.revokeObjectURL(url);
-      const canvas = await urlToCanvas(url);
-      URL.revokeObjectURL(url);
+      if (!canvas) {
+        // Neither strategy decoded the bytes. Put the original image back
+        // rather than leaving a broken <img> on the page.
+        restoreElement(el);
+        return { mode: 'replace', ok: false, reason: 'translated image failed to decode' };
+      }
       const result = attachOverlay(el, canvas, kind);
       return Object.assign(result, { reason: 'csp blocked blob URL' });
     } catch (e) {
-      URL.revokeObjectURL(url);
       // swapSrc already recorded the original src, so restore still works.
       try {
+        // Same rule as above: decode first, revoke afterwards.
         const canvas = await urlToCanvas(url);
         URL.revokeObjectURL(url);
         const result = attachOverlay(el, canvas, kind);
         return Object.assign(result, { reason: 'blob replace failed: ' + e.message });
       } catch (e2) {
+        URL.revokeObjectURL(url);
+        restoreElement(el);
         return { mode: 'overlay', ok: false, reason: e2.message };
       }
     }

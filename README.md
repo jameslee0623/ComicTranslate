@@ -287,7 +287,7 @@ Advanced settings):
 | `translator: HTTP 4xx` with regions present | The translate endpoint refused (rate-limit or block) | Raise `requestDelayMs`; `translator.js` |
 | Translations empty but regions exist | Reply shape changed | `parseReply` in `translator.js` |
 | Boxes land in the wrong place | Normalised→pixel maths, or a downscaled send | `boxToPixels` / `rescaleRegions` in `lensProto.js` |
-| `Could not reach the ComicTranslate content script` | The page was open before the extension was loaded | Reload the page (F5) |
+| `No content script on this page ... (Receiving end does not exist)` | Either the page predates the extension load, **or** a content-script file failed to load on every page | Reload the page (F5); if that changes nothing, the page console names the offending file — run `./tools/verify.sh`, which catches syntax errors and load-time throws |
 
 The popup's **Translate now / Restore page** buttons force a re-run without
 touching settings.
