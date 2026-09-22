@@ -423,6 +423,22 @@ git config core.hooksPath tools/hooks
 
 Then:
 
+An automated Chrome smoke test proves the full boot path in a real browser -
+service worker up, content script injected, allowlist matched (`allowed:true`),
+scanner picking up an image, and a real Lens OCR round trip - against a local
+fixture page, with no request to the real test site:
+
+```sh
+tools/smoke_chrome.sh          # requires Chrome for Testing in /tmp/cft
+```
+
+(The pinned download if `/tmp/cft` is empty:
+`https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.52/mac-arm64/chrome-mac-arm64.zip`
+- branded Chrome 137+ refuses `--load-extension`, so Chrome for Testing is
+required, not merely preferred.)
+
+Manual Firefox check:
+
 1. Load the extension via `about:debugging#/runtime/this-firefox` → Load
    Temporary Add-on → `manifest.json`.
 2. Open a page with a comic page or manga panel, enable the extension in the
