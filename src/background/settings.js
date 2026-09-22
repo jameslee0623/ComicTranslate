@@ -9,8 +9,15 @@
 
 if (typeof globalThis.CTSettings === 'undefined') {
   const DEFAULTS = Object.freeze({
-    /** Master switch. Off by default so a fresh install never phones home. */
-    enabled: false,
+    /**
+     * Master switch. ON by default (user decision): a fresh install should
+     * translate out of the box, and the only engine a fresh install can use
+     * is the free anonymous one, so nothing user-specific happens until the
+     * user adds credentials. The trade-off is that installing the extension
+     * begins sending page images to Google Lens immediately on enabled sites
+     * — if that is unwanted, flip the popup toggle off.
+     */
+    enabled: true,
 
     /**
      * Which OCR/translation engine to use. See engines.js for the registry.
