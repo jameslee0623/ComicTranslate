@@ -165,6 +165,22 @@ for label, files in (("manifest background.scripts", m["background"].get("script
         first = files[0] if files else "nothing"
         fail(f"{label} must load src/shared/compat.js first (got {first})")
 
+# 8b. the popup's on-demand injection (the "Receiving end does not exist"
+#     self-heal) must list EXACTLY the manifest's content-script files in the
+#     same order. The load order is a hard dependency: compat/codec first,
+#     orchestrator last. If the manifest gains a file and popup.js does not,
+#     healed tabs run a different (broken) program than fresh ones.
+heal = re.search(r"async function healTab\(tabId\) \{.*?const files = \[(.*?)\];",
+                 open("src/popup/popup.js").read(), re.S)
+if not heal:
+    fail("popup.js is missing the healTab() injection list (self-heal broken)")
+else:
+    heal_files = re.findall(r"'([^']+\.js)'", heal.group(1))
+    manifest_cs = m["content_scripts"][0]["js"]
+    if heal_files != manifest_cs:
+        fail("healTab() files differ from manifest content_scripts - healed tabs "
+             f"would run a different program: heal={heal_files} manifest={manifest_cs}")
+
 for html in ["src/popup/popup.html", "src/options/options.html"]:
     scripts = re.findall(r'<script src="([^"]+)"', open(html).read())
     if not scripts or os.path.basename(scripts[0]) != "compat.js":

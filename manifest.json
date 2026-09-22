@@ -37,7 +37,7 @@
     ]
   },
 
-  "permissions": ["storage", "unlimitedStorage", "tabs"],
+  "permissions": ["storage", "unlimitedStorage", "tabs", "scripting"],
 
   "host_permissions": ["<all_urls>"],
 
