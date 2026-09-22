@@ -12,7 +12,9 @@ const els = {
   targetLang: document.getElementById('targetLang'),
   engineId: document.getElementById('engineId'),
   engineNote: document.getElementById('engine-note'),
-  renderMode: document.getElementById('renderMode'),
+  sitesSection: document.getElementById('sites-section'),
+  siteLabel: document.getElementById('site-label'),
+  siteToggle: document.getElementById('site-toggle'),
   scanNow: document.getElementById('scan-now'),
   restore: document.getElementById('restore'),
   status: document.getElementById('status'),
@@ -24,6 +26,7 @@ const els = {
 let settings = null;
 let engines = [];
 let activeTab = null;
+let currentHost = null;
 
 async function bg(type, payload) {
   const reply = await browser.runtime.sendMessage(Object.assign({ type }, payload));
@@ -37,17 +40,45 @@ async function toTab(type, payload) {
   try {
     return await browser.tabs.sendMessage(activeTab.id, Object.assign({ type }, payload));
   } catch (e) {
-    // Two very different causes produce this exact message, and they need
-    // different fixes:
+    // "Receiving end does not exist" has two very different causes:
     //   1. the page was open before the extension loaded or reloaded, so no
-    //      content script is attached yet -> reload the page;
+    //      content script is attached yet -> inject it on demand now;
     //   2. a content-script file failed to load on EVERY page (a syntax error,
-    //      or a throw at load time), so onMessage never registers at all.
-    //      Reloading cannot help - the page console names the offending file.
-    throw new Error('No content script on this page. Reload the page (F5). If that '
-      + 'does not help, a content-script file failed to load - check the page '
-      + 'console. (' + e.message + ')');
+    //      or a throw at load time) - onMessage never registers at all, and
+    //      injection would throw the same error again; the page console names
+    //      the offending file.
+    // Cause 1 is common and purely mechanical (Chrome does not inject into
+    // tabs that predate the extension load), so heal it automatically instead
+    // of asking for F5.
+    if (!/Receiving end does not exist/i.test(e.message || '')) throw e;
+    if (!/^https?:/i.test(activeTab.url || '')) {
+      throw new Error('No content script on this page (not a web page). (' + e.message + ')');
+    }
+    await healTab(activeTab.id);
+    return await browser.tabs.sendMessage(activeTab.id, Object.assign({ type }, payload));
   }
+}
+
+/**
+ * One-shot on-demand injection, matching manifest.json's content_scripts
+ * exactly (same files, same order - the load order is a hard dependency:
+ * compat/codec first, then the DOM modules, orchestrator last).
+ */
+let healInjected = false;
+async function healTab(tabId) {
+  const files = [
+    'src/shared/compat.js',
+    'src/shared/codec.js',
+    'src/content/textLayout.js',
+    'src/content/painter.js',
+    'src/content/imageScanner.js',
+    'src/content/replaceImage.js',
+    'src/content/content.js'
+  ];
+  await browser.scripting.executeScript({ target: { tabId }, files });
+  // content.js guards against double-injection (window.__comicTranslateLoaded),
+  // so a stray second heal is harmless - but skip repeat work in one popup life.
+  healInjected = true;
 }
 
 function setStatus(text) {
@@ -128,7 +159,34 @@ async function refreshPageState() {
   fillLanguages(settings.targetLang);
   fillEngines(settings.engineId);
   els.enabled.checked = !!settings.enabled;
-  els.renderMode.value = settings.renderMode;
+
+  // Sites section: mirrors CTSettings.isAllowedOn so the popup always agrees
+  // with what the content script actually decided.
+  currentHost = null;
+  try { currentHost = new URL(activeTab.url).hostname; } catch (e) { /* privileged page */ }
+  const listed = !!currentHost && (settings.domains || []).some(
+    (d) => currentHost === d || currentHost.endsWith('.' + d)
+  );
+  const mode = settings.domainMode;
+  els.sitesSection.hidden = !currentHost || mode === 'all';
+  // The promoted button: hidden on privileged pages, inert when the list
+  // isn't what gates translation (mode 'all' means nothing to add/remove).
+  els.siteToggle.hidden = !currentHost || mode === 'all';
+  if (currentHost) {
+    if (mode === 'blocklist') {
+      els.siteLabel.textContent = listed
+        ? currentHost + ' is on the block list (never translated).'
+        : currentHost + ' is translated (not on the block list).';
+      els.siteToggle.textContent = listed ? 'Remove from block list' : 'Block this site';
+    } else {
+      els.siteLabel.textContent = listed
+        ? currentHost + ' is on the list (translated).'
+        : currentHost + ' is NOT on the list, so it is not translated.';
+      els.siteToggle.textContent = listed
+        ? 'Remove ' + currentHost + ' from the translating list'
+        : 'Add this site to the translating list';
+    }
+  }
 
   // Lara-billed engines get a month-to-date usage line against the cap.
   const usageEl = document.getElementById('lara-usage');
@@ -199,8 +257,18 @@ els.engineId.addEventListener('change', async () => {
   fillEngines(els.engineId.value);
 });
 
-els.renderMode.addEventListener('change', async () => {
-  await save({ renderMode: els.renderMode.value });
+els.siteToggle.addEventListener('click', async () => {
+  if (!currentHost) return;
+  const list = (settings.domains || []).slice();
+  const i = list.indexOf(currentHost);
+  if (i >= 0) list.splice(i, 1); else list.push(currentHost);
+  await save({ domains: list });
+  await refreshPageState();
+  // Re-evaluate live: adding the site starts translation here, removing it
+  // restores any translated images and stops.
+  const result = await pushToTab();
+  if (result && result.error) setStatus(result.error);
+  else setStatus('Site list updated.');
 });
 
 els.scanNow.addEventListener('click', async () => {

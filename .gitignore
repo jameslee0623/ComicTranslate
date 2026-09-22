@@ -9,3 +9,8 @@
 *.zip
 *.csv
 node_modules/
+dist/
+*.crx
+
+# local-only test values (never commit, never push - see verify.sh stage 7)
+tools/local_only.txt

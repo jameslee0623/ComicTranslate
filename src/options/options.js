@@ -8,7 +8,7 @@
 'use strict';
 
 const FIELDS = [
-  'sourceLang', 'targetLang', 'engineId', 'renderMode', 'fontFamily',
+  'sourceLang', 'targetLang', 'engineId', 'fontFamily',
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
   'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap'
@@ -104,7 +104,6 @@ async function load() {
 
   fillLanguageSelects(s.sourceLang, s.targetLang);
   fillEngines(data.engines, s.engineId);
-  el('renderMode').value = s.renderMode;
   el('fontFamily').value = s.fontFamily || '';
   el('minImageSize').value = s.minImageSize;
   el('maxImagesPerPage').value = s.maxImagesPerPage;

@@ -73,12 +73,6 @@
     <section>
       <h2>Rendering</h2>
       <div class="grid">
-        <label for="renderMode">Write the result as</label>
-        <select id="renderMode">
-          <option value="replace">Replace the image element (cleanest)</option>
-          <option value="overlay">Canvas overlay (immune to page CSP)</option>
-        </select>
-
         <label for="fontFamily">Font family (blank = built-in stack)</label>
         <input type="text" id="fontFamily" placeholder="e.g. Comic Neue, sans-serif">
 
@@ -171,6 +165,8 @@
     </footer>
   </main>
 
+  <script src="../shared/compat.js"></script>
+  <script src="../shared/codec.js"></script>
   <script src="../shared/languages.js"></script>
   <script src="options.js"></script>
 </body>

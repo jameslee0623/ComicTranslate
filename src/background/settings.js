@@ -9,8 +9,15 @@
 
 if (typeof globalThis.CTSettings === 'undefined') {
   const DEFAULTS = Object.freeze({
-    /** Master switch. Off by default so a fresh install never phones home. */
-    enabled: false,
+    /**
+     * Master switch. ON by default (user decision): a fresh install should
+     * translate out of the box, and the only engine a fresh install can use
+     * is the free anonymous one, so nothing user-specific happens until the
+     * user adds credentials. The trade-off is that installing the extension
+     * begins sending page images to Google Lens immediately on enabled sites
+     * — if that is unwanted, flip the popup toggle off.
+     */
+    enabled: true,
 
     /**
      * Which OCR/translation engine to use. See engines.js for the registry.
@@ -25,6 +32,7 @@ if (typeof globalThis.CTSettings === 'undefined') {
 
     /** 'auto' lets the engine detect the source language. */
     sourceLang: 'auto',
+    /** Target language. Change it in the popup or on the options page. */
     targetLang: 'en',
 
     /**
@@ -57,8 +65,14 @@ if (typeof globalThis.CTSettings === 'undefined') {
     /** null uses textLayout.js's built-in stack with CJK/RTL coverage. */
     fontFamily: null,
 
-    /** 'all' | 'blocklist' | 'allowlist' */
-    domainMode: 'all',
+    /**
+     * 'all' | 'blocklist' | 'allowlist'. Default is 'allowlist' ("Only the
+     * list"): a fresh install translates ONLY the sites the user explicitly
+     * added, so the extension is inert everywhere until invited. The popup's
+     * Sites section is the one-click way to add the site you are on.
+     */
+    domainMode: 'allowlist',
+    /** The user's site list; starts empty on a fresh install. */
     domains: [],
 
     /** 0 disables caching. */

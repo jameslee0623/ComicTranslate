@@ -1,16 +1,94 @@
 # ComicTranslate
 
-A Firefox extension that finds images and comics on a page, translates the text
-*inside* them, and swaps the picture for a translated version.
+A browser extension for **Firefox and Chrome** that translates the text inside
+pictures — comics, manga, webtoons — right on the page: it finds the images,
+reads the lettering, translates it, erases the original text and draws the
+translation in its place.
 
-**Status:** working extension. The full pipeline, engine abstraction, renderer and
-UI are implemented and load in Firefox. Three engines are available: anonymous
-Google Lens OCR, Lara's official image API, and Lens OCR combined with Lara
-text translation — see [Engines](#lara-translate-engine-official-paid).
+## What it does
+
+1. **Detect** — scans the page for real content images (icons, avatars and
+   thumbnail grids are skipped; anything under 600px is ignored by default).
+2. **Read** — sends each image for OCR and gets back every text line with its
+   exact position and the detected language.
+3. **Translate** — the detected text is translated into your target language.
+4. **Redraw** — the original text is painted over and the translation is
+   typeset into the same speech bubbles and captions.
+5. **Replace** — the page now shows the translated picture. Nothing is
+   uploaded anywhere by the extension itself except the image going to the
+   translation engine you chose.
+
+While it works, the toolbar icon animates and a small progress chip on the page
+shows `Translating… 3/12` (plus Lara usage where it applies). Every translated
+image is cached, so re-reading a page costs nothing and is instant.
+
+## Installing
+
+### Firefox
+
+No build step.
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. **Load Temporary Add-on…** → select `manifest.json` from this folder
+3. **Reload any page you want to translate.** Content scripts attach when a
+   page loads, so a tab that was already open has no translator in it yet.
+
+### Chrome
+
+Chrome cannot use the Firefox manifest shape, so a one-file build step produces
+`dist/chrome` (Python 3 required, Node is **not**):
+
+```bash
+python3 tools/build.py        # writes dist/firefox and dist/chrome
+```
+
+1. Open `chrome://extensions`
+2. Toggle **Developer mode** (top right)
+3. **Load unpacked** → select the **`dist/chrome` folder** (never the repo
+   root — Chrome rejects the source manifest outright)
+4. Reload the page you want to translate; after any rebuild, press Reload ↻ on
+   the extension card and reload the page again.
+
+### Turning it on
+
+The popup switch is **on by default**, but a fresh install translates **only
+sites on its list** ("Sites apply to: only the list"). Open the popup on a site
+you want translated and press **Add this site** — that's it.
+
+## The three translation engines
+
+| Engine | Cost | Needs an account? | What you get |
+|---|---|---|---|
+| **Google Lens (free)** | free | no — anonymous | OCR + translation in two anonymous calls, typeset locally |
+| **Lens + Lara text** | billed per character actually sent | yes — Lara free tier | Google's OCR boxes, Lara's translation quality |
+| **Lara image (official)** | flat 10,000 characters per image | yes — Lara | Lara's server renders the whole translated image; best visual quality |
+
+### How many pages can you translate for free?
+
+- **Google Lens: unlimited.** It is free and anonymous — no account, no quota,
+  no billing. This is the default engine.
+- **Lens + Lara text:** Lara's free plan includes 60,000 characters/month, of
+  which **10,000 are usable through the API**. A comic page is typically
+  500–1,500 characters, so that is roughly **7–20 pages per month** free.
+- **Lara image:** every image bills a **flat 10,000 characters** regardless of
+  how much text it contains. The free allowance covers **about 1 page/month**;
+  the paid Pro plan (500,000/month) covers **about 50 pages/month**. Fine for
+  occasional use, expensive for binge-reading — prefer Lens or Lens + Lara text
+  for volume.
+
+The popup shows a live usage meter for the Lara engines (`Lara this month: X /
+10,000 chars`), and a quota rejection stops the run immediately instead of
+hammering the API for every image on the page.
+
+**Engines in detail** — including how the free engine works without an account
+and what the Lara API does — are documented under
+[Engine abstraction](#engine-abstraction) below.
 
 ---
 
-## The important correction to the original idea
+## Developer documentation
+
+### The important correction to the original idea
 
 The request was "send the picture to Google Translate Images and use the
 translated picture it returns". **That is not how it works**, and it is worth
@@ -214,23 +292,65 @@ same locally-painted output as the Lens engine.
   counter follows the calendar month — Lara's own reset day is account-specific
   — so the options page has a manual reset button.
 
-## Loading it in Firefox
+### Firefox install notes
 
-Node is **not** required — there is no build step. All scripts are classic,
-load-order dependent, and every file is cross-checked for syntax and internal
-consistency.
-
-1. Open `about:debugging#/runtime/this-firefox`
-2. **Load Temporary Add-on…**
-3. Select `/Users/james/FirefoxDev/ComicTranslate/manifest.json`
-4. **Reload every page you want to translate.** Content scripts are injected when
-   a page loads, so a tab that was already open when you loaded or reloaded the
-   extension has no content script in it, and every message to it will fail.
-5. After editing files, press **Reload** on the extension card, then reload the
-   page again.
+Firefox loads the **repo root** `manifest.json` directly — no build step. That
+is the opposite of Chrome, which must load `dist/chrome`; the build exists
+because the two browsers cannot share one manifest shape.
 
 Turn on `debug` in the options page, then watch the **Browser Console**
 (`Cmd+Shift+J`) for `[CT]` and `[CT/lens]` lines.
+
+### Chrome install notes and logs
+
+**Chrome must load `dist/chrome`, never the repo root.** The root
+`manifest.json` is the Firefox source shape — Chrome rejects it outright
+because of `background.scripts`, and the error Chrome shows for that is an
+unhelpful generic one.
+
+### Where the logs are in Chrome
+
+- **Background (service worker):** `chrome://extensions` → ComicTranslate →
+  **Inspect views: service worker**. You should see
+  `[CT] background up: Chrome service worker`.
+- **Page (content script):** the page's own DevTools console
+  (right-click → Inspect). You should see
+  `[CT/content] ready on <host>` — if it is absent, the content script is not
+  in the page (reload the page after any extension reload).
+- Turn on `debug` in the options page for the per-step `[CT]` engine lines.
+
+### What differs between the two browsers, and how it is handled
+
+| | Firefox | Chrome |
+|---|---|---|
+| Background | non-persistent **event page** (`background.scripts`, 14 files) | **service worker** (`background.service_worker`, one file) |
+| Message serialisation | structured clone — `ArrayBuffer` survives | JSON — `ArrayBuffer` does **not** survive |
+| `browser` global | native | does not exist; aliased from `chrome` |
+
+- **`src/shared/compat.js`** — first script in *every* context (background via
+  both load paths, content scripts, popup, options). If `browser` is missing it
+  aliases `globalThis.browser = chrome`, so all other code says `browser.*` and
+  never branches on the engine.
+- **`src/shared/codec.js` (`CTCodec`)** — Chrome's JSON message channel drops
+  `ArrayBuffer`, which is how translated image bytes travel. Replies are
+  wrapped with `packReply`/`unpackReply` at both ends of every byte-carrying
+  message: `ArrayBuffer` → `bytesB64` string on the wire, decoded back at the
+  receiver. On Firefox this is a pass-through; the base64 detour is only paid
+  where it is required.
+- **Listener shape** — every `onMessage` listener replies via `sendResponse`
+  plus `return true`, never by returning a Promise. Firefox accepts both
+  shapes; Chrome ignores returned Promises and drops the reply without the
+  explicit `true`.
+- **`importScripts`** — Chrome reaches the other 13 background modules through
+  `importScripts` at the top of `background.js` (it ignores
+  `background.scripts` entirely). That list is a second, independent source of
+  truth — a module missing from it loads in Firefox and is *silently absent in
+  Chrome* — so `build.py` resolves every `importScripts` entry and the semantic
+  checker cross-checks both lists against the files on disk.
+- **Build output** — `dist/chrome/manifest.json` swaps the `background` block
+  for `service_worker` and adds `minimum_chrome_version: 111`; the two `dist`
+  trees differ in exactly one file, and `build.py` refuses to emit a Chrome
+  manifest that still contains `scripts`.
 
 ### Offline verification
 
@@ -238,7 +358,7 @@ Turn on `debug` in the options page, then watch the **Browser Console**
 ./tools/verify.sh
 ```
 
-Five stages, all runnable without Node or a browser:
+Seven stages, all runnable without Node or a browser:
 
 1. **Syntax** — every JS file is parsed with JavaScriptCore (`jsc`).
 2. **Load** — every module is actually *evaluated* against stubbed browser
@@ -252,6 +372,17 @@ Five stages, all runnable without Node or a browser:
 5. **Semantic** — manifest paths exist, every element id the UI scripts touch
    exists in the HTML, every settings key the UI writes exists in `DEFAULTS`,
    and every `CT*` method called cross-module is actually exported.
+6. **Browser** — the cross-browser guards: `CTCodec` pack/unpack survives a
+   real JSON round trip (the Chrome channel), the base64 chunking handles
+   0x8000 boundaries, the **unpacked control proves bytes are lost through
+   JSON** (the regression the codec exists to prevent), and `CTCompat` aliases
+   a Chrome-shaped environment correctly in background, content and page
+   contexts.
+7. **Privacy** — values declared in the gitignored `tools/local_only.txt`
+   (local-only test values) must never appear on any ref already pushed to
+   origin. The guard file itself is untracked, so the pushed repo carries no
+   trace of what it protects; the stage fails the moment one of the values
+   does reach a pushed ref, instead of letting a review or a stranger find it.
 
 ### Why the Load stage exists
 
@@ -282,6 +413,31 @@ extension works in Firefox — only translating a real page does that
 (see [Verifying it works](#verifying-it-works)).
 
 ## Verifying it works
+
+Before your first push from a fresh clone, activate the pre-push hook that
+keeps local-only test values off origin:
+
+```sh
+git config core.hooksPath tools/hooks
+```
+
+Then:
+
+An automated Chrome smoke test proves the full boot path in a real browser -
+service worker up, content script injected, allowlist matched (`allowed:true`),
+scanner picking up an image, and a real Lens OCR round trip - against a local
+fixture page, with no request to the real test site:
+
+```sh
+tools/smoke_chrome.sh          # requires Chrome for Testing in /tmp/cft
+```
+
+(The pinned download if `/tmp/cft` is empty:
+`https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.52/mac-arm64/chrome-mac-arm64.zip`
+- branded Chrome 137+ refuses `--load-extension`, so Chrome for Testing is
+required, not merely preferred.)
+
+Manual Firefox check:
 
 1. Load the extension via `about:debugging#/runtime/this-firefox` → Load
    Temporary Add-on → `manifest.json`.

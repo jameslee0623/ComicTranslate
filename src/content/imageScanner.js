@@ -15,7 +15,7 @@ if (typeof globalThis.CTImageScanner === 'undefined') {
   /**
    * Vector files are always logos, icons or UI chrome, never comic lettering, so
    * they are never worth OCR. Observed in practice: the scanner once picked
-   * EXAMPLE-MANGA-SITE's 300x141 logo.svg as the first candidate on a manga page.
+   * a manga site's 300x141 logo.svg scoring as the first candidate.
    */
   const VECTOR = /\.svgz?($|[?#])/i;
 

@@ -16,6 +16,8 @@
 
   <p id="page-state" class="muted">Checking page…</p>
 
+  <button id="site-toggle" hidden>Add this site to the translating list</button>
+
   <section>
     <label for="targetLang">Translate into</label>
     <select id="targetLang"></select>
@@ -29,12 +31,9 @@
 
   <p id="lara-usage" class="muted small" hidden></p>
 
-  <section>
-    <label for="renderMode">Write result as</label>
-    <select id="renderMode">
-      <option value="replace">Replace the image (cleanest)</option>
-      <option value="overlay">Canvas overlay (CSP-proof)</option>
-    </select>
+  <section id="sites-section" hidden>
+    <label>Sites</label>
+    <p id="site-label" class="muted small"></p>
   </section>
 
   <div class="row">
@@ -49,6 +48,8 @@
     <button id="clear-cache" class="link">Clear cache</button>
   </footer>
 
+  <script src="../shared/compat.js"></script>
+  <script src="../shared/codec.js"></script>
   <script src="../shared/languages.js"></script>
   <script src="popup.js"></script>
 </body>
