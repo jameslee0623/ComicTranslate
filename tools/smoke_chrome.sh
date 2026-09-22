@@ -13,9 +13,10 @@ set -u
 
 DOMAIN=$(sed -n "s/^ *domains: \['\([^']*\)'\],$/\1/p" src/background/settings.js | head -1)
 if [ -z "$DOMAIN" ]; then
-  echo "smoke: could not read the test domain from src/background/settings.js"
-  echo "       (is the LOCAL-ONLY commit present?)"
-  exit 2
+  # No local-only defaults (e.g. on a pushed branch): use a throwaway hostname
+  # and allowlist it by seeding the extension's storage before boot.
+  DOMAIN=ct-smoke.test
+  SEED_DOMAIN=1
 fi
 
 # Branded Chrome 137+ IGNORES --load-extension ("not allowed in Google
@@ -87,10 +88,37 @@ sleep 1
 # macOS has no GNU `timeout`, so Chrome runs in the background and is capped
 # by a poll (60s): the boot lines and the title flip both happen within
 # seconds; the cap only guards against Chrome never exiting.
+if [ "${SEED_DOMAIN:-0}" = 1 ]; then
+  # No local-only defaults on this branch: allowlist the throwaway domain by
+  # writing the settings key directly into storage before the extension's own
+  # scripts run. The key name and defaults merge behaviour are pinned by
+  # check_semantics (settings.js loads DEFAULTS under stored values).
+  cat > "$TMP/ct_seed.js" <<EOF
+chrome.storage.local.set({ ct_settings: { domains: ['$DOMAIN'] } });
+EOF
+  # A copy of the unpacked extension with one extra content script that seeds
+  # storage before content.js boots (content_scripts run in listed order, and
+  # compat/codec/content.js are all later in the list, so the seed lands first).
+  rm -rf "$TMP/ext"
+  cp -R dist/chrome "$TMP/ext"
+  python3 - "$TMP/ext/manifest.json" <<'PYEOF'
+import json, sys
+m = json.load(open(sys.argv[1]))
+# insert the seed right after compat.js so it runs before content.js
+js = m['content_scripts'][0]['js']
+js.insert(1, 'ct_seed.js')
+open(sys.argv[1], 'w').write(json.dumps(m))
+PYEOF
+  cp "$TMP/ct_seed.js" "$TMP/ext/ct_seed.js"
+  EXT_DIR="$TMP/ext"
+else
+  EXT_DIR="$PWD/dist/chrome"
+fi
+
 "$CHROME" --headless=new --disable-gpu --no-first-run \
   --no-default-browser-check \
   --user-data-dir="$TMP/profile" \
-  --load-extension="$PWD/dist/chrome" \
+  --load-extension="$EXT_DIR" \
   --host-resolver-rules="MAP $DOMAIN 127.0.0.1" \
   --enable-logging=stderr --v=0 \
   --dump-dom "http://$DOMAIN:$PORT/" > "$TMP/dom.html" 2> "$TMP/console.log" &

@@ -168,13 +168,12 @@ async function refreshPageState() {
     (d) => currentHost === d || currentHost.endsWith('.' + d)
   );
   const mode = settings.domainMode;
-  els.sitesSection.hidden = !currentHost;
-  els.siteToggle.disabled = mode === 'all' || !currentHost;
+  els.sitesSection.hidden = !currentHost || mode === 'all';
+  // The promoted button: hidden on privileged pages, inert when the list
+  // isn't what gates translation (mode 'all' means nothing to add/remove).
+  els.siteToggle.hidden = !currentHost || mode === 'all';
   if (currentHost) {
-    if (mode === 'all') {
-      els.siteLabel.textContent = 'All sites are translated.';
-      els.siteToggle.textContent = 'Sites list is not in use';
-    } else if (mode === 'blocklist') {
+    if (mode === 'blocklist') {
       els.siteLabel.textContent = listed
         ? currentHost + ' is on the block list (never translated).'
         : currentHost + ' is translated (not on the block list).';
@@ -183,7 +182,9 @@ async function refreshPageState() {
       els.siteLabel.textContent = listed
         ? currentHost + ' is on the list (translated).'
         : currentHost + ' is NOT on the list, so it is not translated.';
-      els.siteToggle.textContent = listed ? 'Remove from list' : 'Add this site';
+      els.siteToggle.textContent = listed
+        ? 'Remove ' + currentHost + ' from the translating list'
+        : 'Add this site to the translating list';
     }
   }
 
