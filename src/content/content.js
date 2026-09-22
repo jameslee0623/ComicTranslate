@@ -16,6 +16,10 @@
   let running = false;
   let queued = false;
   const stats = { translated: 0, failed: 0, skipped: 0 };
+  /** Most recent failure reason - surfaced in the chip and the popup, because a
+   *  silent failure looks identical to a successful translation that drew
+   *  nothing, which is exactly how a dead engine can seem healthy. */
+  let lastError = null;
 
   function log(...args) {
     if (settings && settings.debug) console.log('[CT/content]', ...args);
@@ -144,6 +148,13 @@
     if (chipLabel) chipLabel.textContent = text;
   }
 
+  /** Chip-sized version of an error message. */
+  function shorten(text, max) {
+    const limit = max || 110;
+    const s = String(text || '');
+    return s.length > limit ? s.slice(0, limit - 1) + '\u2026' : s;
+  }
+
   function hideChip() {
     if (chipHideTimer) { clearTimeout(chipHideTimer); chipHideTimer = null; }
     if (chip) {
@@ -266,6 +277,7 @@
         }
 
         let runIndex = 0;
+        let firstFailure = null;
         for (const candidate of candidates) {
           if (!settings.enabled) break;
           runIndex++;
@@ -279,6 +291,8 @@
             if (outcome && outcome.ok) log('done', outcome);
           } catch (e) {
             stats.failed++;
+            if (!firstFailure) firstFailure = e.message;
+            lastError = e.message;
             recordTransportFailure(candidate.el);
             log('failed', candidate.url.slice(0, 120), e.message);
           }
@@ -289,9 +303,13 @@
         }
 
         if (candidates.length) {
-          chipText((settings.enabled ? 'Done' : 'Paused') + ' · ' +
-                   runIndex + '/' + candidates.length + ' images' + usageSuffix());
-          chipHideTimer = setTimeout(hideChip, 3200);
+          // Never report a bare "Done" over a silent failure: that is what makes
+          // a completely dead engine look like a working one.
+          chipText((firstFailure
+            ? 'Failed: ' + shorten(firstFailure)
+            : (settings.enabled ? 'Done' : 'Paused') + ' · ' +
+              runIndex + '/' + candidates.length + ' images') + usageSuffix());
+          chipHideTimer = setTimeout(hideChip, firstFailure ? 20000 : 3200);
         }
       } while (queued);
     } finally {
@@ -406,6 +424,7 @@
           stats,
           translated: CTReplace.count(),
           running,
+          lastError,
           hasObserver: !!observer
         });
 

@@ -54,6 +54,18 @@ function setStatus(text) {
   els.status.textContent = text;
 }
 
+/**
+ * One-line page summary. Includes the most recent failure reason, because a
+ * bare count never says WHY an engine produced nothing - and "0 translated,
+ * 1 failed" reads much the same whether the API rejected the request, the
+ * quota ran out, or the OCR simply found no text.
+ */
+function pageSummary(status) {
+  return `On this page: ${status.translated} translated, ` +
+         `${status.stats.failed} failed, ${status.stats.skipped} skipped.` +
+         (status.lastError ? ' Last error: ' + status.lastError : '');
+}
+
 function fillLanguages(selected) {
   els.targetLang.textContent = '';
   for (const lang of globalThis.CT_LANGUAGES) {
@@ -150,8 +162,7 @@ async function refreshPageState() {
   try {
     const status = await toTab('CT_GET_STATUS');
     if (status && status.stats) {
-      setStatus(`On this page: ${status.translated} translated, ` +
-                `${status.stats.failed} failed, ${status.stats.skipped} skipped.`);
+      setStatus(pageSummary(status));
     }
   } catch {
     setStatus('Reload the page to activate on it.');
@@ -184,8 +195,7 @@ els.scanNow.addEventListener('click', async () => {
   try {
     await toTab('CT_SCAN_NOW');
     const status = await toTab('CT_GET_STATUS');
-    setStatus(`On this page: ${status.translated} translated, ` +
-              `${status.stats.failed} failed, ${status.stats.skipped} skipped.`);
+    setStatus(pageSummary(status));
   } catch (e) {
     setStatus(e.message);
   }
