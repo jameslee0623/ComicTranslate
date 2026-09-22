@@ -17,7 +17,12 @@ if (typeof globalThis.CTImageFetch === 'undefined') {
 
   /** Magic-byte sniffing: CDNs frequently serve images as application/octet-stream. */
   function sniffMime(bytes) {
-    const b = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 16));
+    // Accepts an ArrayBuffer (from the background fetch) and a Uint8Array (from
+    // base64 decoding at the message boundary). The offset/length constructor
+    // form would silently misread a typed array as its backing buffer, so
+    // normalise to a view first.
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const b = u8.subarray(0, Math.min(u8.length, 16));
     if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
     if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
     if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
@@ -81,8 +86,11 @@ if (typeof globalThis.CTImageFetch === 'undefined') {
     if (!reply || !reply.ok) {
       throw new Error((reply && reply.error) || 'content-script fetch failed');
     }
-    const bytes = reply.bytes;
-    return { bytes, mime: normaliseMime(reply.mime, bytes) };
+    // The reply crossed a message boundary, so its bytes are base64-encoded.
+    const unpacked = CTCodec.unpackReply(reply);
+    const bytes = unpacked.bytes;
+    if (!bytes || !bytes.length) throw new Error('content-script fetch returned no bytes');
+    return { bytes, mime: normaliseMime(unpacked.mime, bytes) };
   }
 
   /**

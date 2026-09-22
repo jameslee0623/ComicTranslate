@@ -42,7 +42,9 @@
     const reply = await browser.runtime.sendMessage(Object.assign({ type }, payload));
     if (!reply) throw new Error('no reply from background for ' + type);
     if (!reply.ok) throw new Error(reply.error || 'background error');
-    return reply.data;
+    // Bytes cross the message boundary base64-encoded because Chrome serialises
+    // messages as JSON; this restores them to Uint8Array.
+    return CTCodec.unpackReply(reply.data);
   }
 
   function bytesToDataUrl(bytes, mime) {
@@ -446,24 +448,34 @@
     return { allowed: allowed.allowed, stats, redone: stale };
   }
 
-  browser.runtime.onMessage.addListener((msg) => {
-    if (!msg || typeof msg.type !== 'string') return undefined;
+  /**
+   * sendResponse + `return true`, not a returned Promise: Firefox accepts both,
+   * Chrome only this one. The in-page fetch hands image bytes back to the
+   * background, so the reply is run through CTCodec.packReply - Chrome's JSON
+   * message serialisation would otherwise turn those bytes into {}.
+   */
+  browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!msg || typeof msg.type !== 'string') return false;
 
+    let reply;
     switch (msg.type) {
       case 'CT_FETCH_IMAGE_IN_PAGE':
-        return fetchInPage(msg.url);
+        reply = fetchInPage(msg.url);
+        break;
 
       case 'CT_APPLY_STATE':
-        return applyState(msg.settings);
+        reply = applyState(msg.settings);
+        break;
 
       case 'CT_RESTORE':
         stopObserver();
         if (settings) settings.enabled = false;
         hideChip();
-        return Promise.resolve({ restored: CTReplace.restoreAll() });
+        reply = Promise.resolve({ restored: CTReplace.restoreAll() });
+        break;
 
       case 'CT_GET_STATUS':
-        return Promise.resolve({
+        reply = Promise.resolve({
           stats,
           translated: CTReplace.count(),
           running,
@@ -471,17 +483,25 @@
           quotaStopped,
           hasObserver: !!observer
         });
+        break;
 
       case 'CT_SCAN_NOW':
         // An explicit user request clears a previous quota stop: they may have
         // topped up, and refusing to even try would be worse than one 429.
         quotaStopped = false;
         runQueue();
-        return Promise.resolve({ started: true });
+        reply = Promise.resolve({ started: true });
+        break;
 
       default:
-        return undefined;
+        return false;   // not ours - let another listener answer
     }
+
+    Promise.resolve(reply).then(
+      (data) => sendResponse(CTCodec.packReply(data)),
+      (err) => sendResponse({ ok: false, error: err && err.message ? err.message : String(err) })
+    );
+    return true;
   });
 
   // Boot: pull settings and act, but never before the page has images to find.
@@ -489,4 +509,8 @@
     .then((data) => applyState(data.settings))
     .then((result) => log('booted', result))
     .catch((e) => console.warn('[CT] boot failed', e.message));
+
+  // Not debug-gated on purpose: the first thing a "nothing happens" report
+  // needs to establish is whether the content script is in the page at all.
+  console.log('[CT/content] ready on', location.host || location.pathname);
 })();

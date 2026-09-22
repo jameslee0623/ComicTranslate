@@ -24,7 +24,11 @@ def fail(msg):
 
 # 1. paths referenced by the manifest must exist
 m = json.load(open("manifest.json"))
-refs = list(m["background"]["scripts"]) + [m["background"]["service_worker"]]
+# The root manifest is the FIREFOX shape (background.scripts). The Chrome shape
+# is derived by tools/build.py, which asserts its own invariants; see check 8.
+refs = list(m["background"].get("scripts") or [])
+if m["background"].get("service_worker"):
+    refs.append(m["background"]["service_worker"])
 refs += m["content_scripts"][0]["js"]
 refs += [m["action"]["default_popup"], m["options_ui"]["page"]]
 for p in (m.get("icons") or {}).values():
@@ -150,6 +154,51 @@ for entry in m["content_scripts"]:
 for f in sorted(os.listdir("src/content")):
     if f.endswith(".js") and f not in cs_files:
         fail(f"src/content/{f} is not in manifest content_scripts (never loads)")
+
+# 8. cross-browser: compat.js must be the FIRST script in every context.
+#    It is what gives Chrome a `browser` namespace. If it loads after a module
+#    that touches `browser.*` while evaluating, that module throws - on Chrome
+#    only, which is the worst possible failure mode.
+for label, files in (("manifest background.scripts", m["background"].get("scripts") or []),
+                     ("manifest content_scripts js", m["content_scripts"][0]["js"])):
+    if not files or os.path.basename(files[0]) != "compat.js":
+        first = files[0] if files else "nothing"
+        fail(f"{label} must load src/shared/compat.js first (got {first})")
+
+for html in ["src/popup/popup.html", "src/options/options.html"]:
+    scripts = re.findall(r'<script src="([^"]+)"', open(html).read())
+    if not scripts or os.path.basename(scripts[0]) != "compat.js":
+        first = scripts[0] if scripts else "no scripts"
+        fail(f"{html} must load shared/compat.js first (got {first})")
+
+# 9. Chrome runs the background as a SERVICE WORKER, which has no DOM at all.
+#    A bare `document.`/`window.` there is a ReferenceError on Chrome and works
+#    perfectly on Firefox - so it has to be behind a typeof guard.
+DOM_TOKENS = ("document.", "window.", "getComputedStyle", "MutationObserver")
+for name in sorted(os.listdir("src/background")):
+    if not name.endswith(".js"):
+        continue
+    path = os.path.join("src/background", name)
+    src = open(path).read()
+    if any(tok in src for tok in DOM_TOKENS):
+        if "typeof document" not in src and "typeof window" not in src:
+            fail(f"{path} uses DOM APIs with no typeof guard - Chrome's service "
+                 f"worker has no DOM")
+
+# 10. The message reply style has to be sendResponse + `return true`.
+#     Firefox accepts a returned Promise; Chrome does not, and closes the port
+#     instead, which surfaces as "The message port closed before a response was
+#     received" - an error that says nothing about the real cause.
+for path, tag in (("src/background/background.js", "background"),
+                  ("src/content/content.js", "content script")):
+    src = open(path).read()
+    if "onMessage.addListener" not in src:
+        fail(f"{path} has no runtime.onMessage listener")
+        continue
+    if "sendResponse" not in src:
+        fail(f"{tag} onMessage listener must reply via sendResponse for Chrome")
+    if not re.search(r"return true;", src):
+        fail(f"{tag} onMessage listener must `return true` for Chrome")
 
 print()
 if problems:

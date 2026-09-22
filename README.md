@@ -232,13 +232,86 @@ consistency.
 Turn on `debug` in the options page, then watch the **Browser Console**
 (`Cmd+Shift+J`) for `[CT]` and `[CT/lens]` lines.
 
+Firefox loads the **repo root** `manifest.json` directly — no build step. That
+is the opposite of Chrome, which must load `dist/chrome` (next section); the
+build exists because the two browsers cannot share one manifest shape.
+
+## Loading it in Chrome
+
+**Chrome must load `dist/chrome`, never the repo root.** The root
+`manifest.json` is the Firefox source shape — Chrome rejects it outright
+because of `background.scripts`, and the error Chrome shows for that is an
+unhelpful generic one. If you pointed Chrome at the repo root, that is the
+whole problem; run the build and load `dist/chrome` instead.
+
+Node is **not** required, but Python 3 is (it only writes files):
+
+```bash
+python3 tools/build.py           # both targets, into dist/
+python3 tools/build.py --chrome  # just dist/chrome
+python3 tools/build.py --firefox # just dist/firefox (identical copy of the tree)
+```
+
+Then in Chrome:
+
+1. Open `chrome://extensions`
+2. Toggle **Developer mode** (top right)
+3. **Load unpacked** → select the **`dist/chrome` folder** (not the repo root)
+4. After rebuilding (`python3 tools/build.py`), press the **Reload** ↻ on the
+   ComicTranslate card, then reload the page you are translating — same rule
+   as Firefox: content scripts only inject on page load.
+
+### Where the logs are in Chrome
+
+- **Background (service worker):** `chrome://extensions` → ComicTranslate →
+  **Inspect views: service worker**. You should see
+  `[CT] background up: Chrome service worker`.
+- **Page (content script):** the page's own DevTools console
+  (right-click → Inspect). You should see
+  `[CT/content] ready on <host>` — if it is absent, the content script is not
+  in the page (reload the page after any extension reload).
+- Turn on `debug` in the options page for the per-step `[CT]` engine lines.
+
+### What differs between the two browsers, and how it is handled
+
+| | Firefox | Chrome |
+|---|---|---|
+| Background | non-persistent **event page** (`background.scripts`, 14 files) | **service worker** (`background.service_worker`, one file) |
+| Message serialisation | structured clone — `ArrayBuffer` survives | JSON — `ArrayBuffer` does **not** survive |
+| `browser` global | native | does not exist; aliased from `chrome` |
+
+- **`src/shared/compat.js`** — first script in *every* context (background via
+  both load paths, content scripts, popup, options). If `browser` is missing it
+  aliases `globalThis.browser = chrome`, so all other code says `browser.*` and
+  never branches on the engine.
+- **`src/shared/codec.js` (`CTCodec`)** — Chrome's JSON message channel drops
+  `ArrayBuffer`, which is how translated image bytes travel. Replies are
+  wrapped with `packReply`/`unpackReply` at both ends of every byte-carrying
+  message: `ArrayBuffer` → `bytesB64` string on the wire, decoded back at the
+  receiver. On Firefox this is a pass-through; the base64 detour is only paid
+  where it is required.
+- **Listener shape** — every `onMessage` listener replies via `sendResponse`
+  plus `return true`, never by returning a Promise. Firefox accepts both
+  shapes; Chrome ignores returned Promises and drops the reply without the
+  explicit `true`.
+- **`importScripts`** — Chrome reaches the other 13 background modules through
+  `importScripts` at the top of `background.js` (it ignores
+  `background.scripts` entirely). That list is a second, independent source of
+  truth — a module missing from it loads in Firefox and is *silently absent in
+  Chrome* — so `build.py` resolves every `importScripts` entry and the semantic
+  checker cross-checks both lists against the files on disk.
+- **Build output** — `dist/chrome/manifest.json` swaps the `background` block
+  for `service_worker` and adds `minimum_chrome_version: 111`; the two `dist`
+  trees differ in exactly one file, and `build.py` refuses to emit a Chrome
+  manifest that still contains `scripts`.
+
 ### Offline verification
 
 ```bash
 ./tools/verify.sh
 ```
 
-Five stages, all runnable without Node or a browser:
+Six stages, all runnable without Node or a browser:
 
 1. **Syntax** — every JS file is parsed with JavaScriptCore (`jsc`).
 2. **Load** — every module is actually *evaluated* against stubbed browser
@@ -252,6 +325,12 @@ Five stages, all runnable without Node or a browser:
 5. **Semantic** — manifest paths exist, every element id the UI scripts touch
    exists in the HTML, every settings key the UI writes exists in `DEFAULTS`,
    and every `CT*` method called cross-module is actually exported.
+6. **Browser** — the cross-browser guards: `CTCodec` pack/unpack survives a
+   real JSON round trip (the Chrome channel), the base64 chunking handles
+   0x8000 boundaries, the **unpacked control proves bytes are lost through
+   JSON** (the regression the codec exists to prevent), and `CTCompat` aliases
+   a Chrome-shaped environment correctly in background, content and page
+   contexts.
 
 ### Why the Load stage exists
 

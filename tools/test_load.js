@@ -20,6 +20,12 @@ var noop = function () {};
 globalThis.window = globalThis;
 globalThis.location = { href: 'https://example.test/page' };
 globalThis.navigator = { userAgent: 'jsc-smoke-test' };
+// Real browsers always define console; the smoke harness must too, or any
+// module that logs at boot (which is the point of the boot lines) will throw.
+if (typeof console === 'undefined') {
+  globalThis.console = { log: noop, warn: noop, error: noop, info: noop, debug: noop };
+}
+
 globalThis.crypto = { subtle: { digest: function () { return Promise.resolve(new ArrayBuffer(32)); } } };
 globalThis.indexedDB = {};
 globalThis.TextEncoder = function () { this.encode = function () { return new Uint8Array(0); }; };
@@ -73,6 +79,7 @@ globalThis.browser = {
   }
 };
 
+var SHARED = ['compat.js', 'codec.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
                   'laraEngine.js', 'lensLaraEngine.js', 'engines.js', 'background.js'];
@@ -104,6 +111,10 @@ function loadAll(dir, files) {
   }
 }
 
+print('--- loading shared modules ---');
+// Same order every real context uses: compat.js first, so `browser` exists on
+// Chrome before anything else touches it.
+loadAll('shared', SHARED);
 print('--- loading background modules ---');
 loadAll('background', BACKGROUND);
 print('--- loading content modules ---');
@@ -131,7 +142,8 @@ var EXPECTED = {
   CTImageScanner: ['scan', 'isEligibleUrl', 'markSeen', 'hasSeen', 'reset',
                    'imgCandidate', 'backgroundCandidate'],
   CTReplace: ['apply', 'applyImageBytes', 'restoreElement', 'restoreAll', 'mountOverlay',
-              'unmountOverlay', 'canvasToBlobUrl', 'count']
+              'unmountOverlay', 'canvasToBlobUrl', 'count'],
+  CTCodec: ['toBase64', 'fromBase64', 'packReply', 'unpackReply']
 };
 
 print('');
@@ -183,6 +195,23 @@ if (!defaults || typeof defaults !== 'object') {
           defaults.minImageSize);
     failures++;
   }
+}
+
+print('');
+// compat.js has no functions to enumerate, so assert its shape directly.
+// `browser` must exist after loading on Chrome, where the platform only
+// provides `chrome`.
+if (!globalThis.CTCompat || typeof globalThis.CTCompat !== 'object') {
+  print('  FAIL CTCompat is undefined after load');
+  failures++;
+} else if (typeof globalThis.CTCompat.available !== 'boolean' ||
+           typeof globalThis.CTCompat.isFirefox !== 'boolean') {
+  print('  FAIL CTCompat must expose boolean `available` and `isFirefox`');
+  failures++;
+}
+if (!globalThis.browser || typeof globalThis.browser.runtime !== 'object') {
+  print('  FAIL no `browser` namespace after compat.js - Chrome has no browser.*');
+  failures++;
 }
 
 print('');

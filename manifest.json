@@ -19,8 +19,9 @@
   },
 
   "background": {
-    "service_worker": "src/background/background.js",
     "scripts": [
+      "src/shared/compat.js",
+      "src/shared/codec.js",
       "src/background/settings.js",
       "src/background/usage.js",
       "src/background/cache.js",
@@ -46,6 +47,8 @@
       "all_frames": true,
       "run_at": "document_idle",
       "js": [
+        "src/shared/compat.js",
+        "src/shared/codec.js",
         "src/content/textLayout.js",
         "src/content/painter.js",
         "src/content/imageScanner.js",

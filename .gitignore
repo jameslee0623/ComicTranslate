@@ -9,3 +9,5 @@
 *.zip
 *.csv
 node_modules/
+dist/
+*.crx

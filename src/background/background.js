@@ -13,13 +13,24 @@
 // double evaluation, so this is a no-op under Firefox.
 if (typeof importScripts === 'function') {
   try {
-    importScripts('settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
+    // Paths are relative to this file (src/background/), so the shared modules
+    // are one level up. compat.js must come first: everything below assumes
+    // `browser` exists, and on Chrome it does not until compat.js aliases it.
+    importScripts('../shared/compat.js', '../shared/codec.js',
+                  'settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
                   'laraEngine.js', 'lensLaraEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
 }
+
+// One line per context, always: this is how we tell "the background never
+// started" from "it started but the work failed" in bug reports. In Chrome the
+// line appears in the service worker console (chrome://extensions -> Inspect
+// views: service worker); in Firefox in the Browser Console.
+console.log('[CT] background up:',
+  typeof importScripts === 'function' ? 'Chrome service worker' : 'Firefox event page');
 
 /**
  * Every translation is funneled through a single promise chain. That serialises
@@ -186,15 +197,30 @@ async function handle(msg, sender) {
   }
 }
 
-browser.runtime.onMessage.addListener((msg, sender) => {
-  if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('CT_')) return undefined;
-  return handle(msg, sender).then(
-    (data) => ({ ok: true, data }),
+/**
+ * Reply with sendResponse() and `return true` - never by returning a Promise.
+ * Firefox accepts both styles; Chrome accepts only this one, because a returned
+ * Promise causes Chrome to close the message port before the reply exists and
+ * the sender sees "The message port closed before a response was received".
+ *
+ * Returning true has a second benefit on Chrome: it keeps the service worker
+ * alive while the work is pending, which matters because one Lens scan is
+ * several network round-trips and Chrome terminates an idle worker after ~30s.
+ *
+ * CTCodec.packReply is what makes the payload survive Chrome at all - Chrome
+ * serialises messages as JSON, so raw image bytes would arrive as {}.
+ */
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('CT_')) return false;
+
+  handle(msg, sender).then(
+    (data) => sendResponse({ ok: true, data: CTCodec.packReply(data) }),
     (err) => {
       console.error('[CT] handler failed for', msg.type, err);
-      return { ok: false, error: err && err.message ? err.message : String(err) };
+      sendResponse({ ok: false, error: err && err.message ? err.message : String(err) });
     }
   );
+  return true;
 });
 
 browser.runtime.onInstalled.addListener((details) => {
