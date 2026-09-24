@@ -68,24 +68,26 @@
           <span id="lara-probe-result" class="muted small"></span>
         </p>
       </div>
-      <div id="local-image-fields" hidden>
+      <div id="lens-local-fields" hidden>
         <div class="grid">
-          <label for="localImageUrl">Local server URL</label>
-          <input type="text" id="localImageUrl" autocomplete="off"
-                 placeholder="http://localhost:8000/translate-image">
-          <label for="localImageApiKey">API key (optional)</label>
-          <input type="password" id="localImageApiKey" autocomplete="off"
+          <label for="localTextUrl">Local server URL</label>
+          <input type="text" id="localTextUrl" autocomplete="off"
+                 placeholder="http://localhost:8000/translate">
+          <label for="localTextApiKey">API key (optional)</label>
+          <input type="password" id="localTextApiKey" autocomplete="off"
                  placeholder="only if your server needs a bearer token">
         </div>
         <p class="muted small">
-          Your own server, Lara-image style: page image in
-          (multipart image, source, target), translated bitmap out
-          (raw bytes or JSON base64). Bare host:port gets
-          /translate-image appended. Stays on your machine; no quota.
+          Google Lens finds the boxes and reads the text for free; only those
+          strings are POSTed to your own server as
+          {texts, source, target}, which answers
+          {translations} index-aligned with the input. The reply is drawn
+          onto the page exactly like the free engine does it. Bare host:port gets
+          /translate appended. The page image never leaves the browser.
         </p>
         <p>
-          <button id="local-image-probe" class="secondary">Test local server</button>
-          <span id="local-image-probe-result" class="muted small"></span>
+          <button id="lens-local-probe" class="secondary">Test local server</button>
+          <span id="lens-local-probe-result" class="muted small"></span>
         </p>
       </div>
     </section>

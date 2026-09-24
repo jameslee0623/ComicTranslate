@@ -129,8 +129,9 @@ function fillEngines(selected) {
                  'usually 500-1,500). Needs credentials in Settings.',
     lens: 'No API key required. Undocumented Google endpoint that can change ' +
           'without notice.',
-    'local-image': 'Your own server, free, no quota. Enter its URL in Settings; ' +
-          'the page image goes only there and the translated bitmap comes back.'
+    'lens-local': 'Lens finds the text for free; only those strings go to your ' +
+          'own local server, which returns the translation. No quota. Enter its ' +
+          'URL in Settings.'
   };
   els.engineNote.textContent = current
     ? (NOTES[current.id] || (current.needsKey

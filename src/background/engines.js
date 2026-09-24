@@ -169,7 +169,7 @@ if (typeof globalThis.CTEngines === 'undefined') {
   register(CTLensEngine);
   register(CTLaraEngine);
   register(CTLensLaraEngine);
-  register(CTLocalImageEngine);
+  register(CTLensLocalEngine);
 
   globalThis.CTEngines = { register, get, list, translateImage, normaliseRegion };
 }

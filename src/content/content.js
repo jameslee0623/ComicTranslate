@@ -429,7 +429,7 @@
       previous.sourceLang !== next.sourceLang ||
       previous.engineId !== next.engineId ||
       previous.laraModel !== next.laraModel ||
-      previous.localImageUrl !== next.localImageUrl ||
+      previous.localTextUrl !== next.localTextUrl ||
       previous.renderMode !== next.renderMode
     );
     if (stale) {

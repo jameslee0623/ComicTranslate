@@ -83,10 +83,10 @@ globalThis.browser = {
   }
 };
 
-var SHARED = ['compat.js', 'codec.js'];
+var SHARED = ['compat.js', 'codec.js', 'languages.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'localImageEngine.js', 'engines.js', 'background.js'];
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -136,8 +136,9 @@ var EXPECTED = {
                 'rescaleRegions', 'boxToPixels', 'collectWordsDeep'],
   CTLensEngine: ['imageToRegions', 'toUploadable', 'log'],
   CTLensLaraEngine: ['imageToRegions', 'log'],
-  CTLocalImageEngine: ['requireEndpoint', 'extFromMime', 'parseImageResponse',
-                 'imageToRegions', 'log'],
+  CTLensLocalEngine: ['requireEndpoint', 'parseReply', 'variantKey',
+                      'languageLabel', 'buildInstruction', 'extractJsonArray',
+                      'normalizeTranslations', 'imageToRegions', 'log'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'isQuotaError',
                  'imageToRegions'],

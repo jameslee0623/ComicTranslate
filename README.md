@@ -55,11 +55,12 @@ The popup switch is **on by default**, but a fresh install translates **only
 sites on its list** ("Sites apply to: only the list"). Open the popup on a site
 you want translated and press **Add this site** — that's it.
 
-## The three translation engines
+## The translation engines
 
 | Engine | Cost | Needs an account? | What you get |
 |---|---|---|---|
 | **Google Lens (free)** | free | no — anonymous | OCR + translation in two anonymous calls, typeset locally |
+| **Lens OCR + your own local AI** | free (your own hardware) | no — your own server | Google's OCR boxes, your local model's translation, typeset locally |
 | **Lens + Lara text** | billed per character actually sent | yes — Lara free tier | Google's OCR boxes, Lara's translation quality |
 | **Lara image (official)** | flat 10,000 characters per image | yes — Lara | Lara's server renders the whole translated image; best visual quality |
 
@@ -67,6 +68,9 @@ you want translated and press **Add this site** — that's it.
 
 - **Google Lens: unlimited.** It is free and anonymous — no account, no quota,
   no billing. This is the default engine.
+- **Lens OCR + your own local AI: unlimited.** The detection and the OCR are
+  Google's free anonymous endpoint; only the OCR'd *strings* are sent on, to a
+  server you run yourself. Nothing is billed because nothing is metered.
 - **Lens + Lara text:** Lara's free plan includes 60,000 characters/month, of
   which **10,000 are usable through the API**. A comic page is typically
   500–1,500 characters, so that is roughly **7–20 pages per month** free.
@@ -79,6 +83,51 @@ you want translated and press **Add this site** — that's it.
 The popup shows a live usage meter for the Lara engines (`Lara this month: X /
 10,000 chars`), and a quota rejection stops the run immediately instead of
 hammering the API for every image on the page.
+
+### Running your own translation server
+
+Choose **Lens OCR + your own local AI** in Settings, enter your server's URL
+(and a bearer token if it wants one), then press **Test local server**. That
+test posts an empty `texts` array — it proves the server answers without
+spending a translation on it.
+
+The engine does exactly two things: it asks Google Lens where the text is and
+what it says, then it posts those strings to your URL. The image itself never
+leaves the browser, so a local model only ever sees text:
+
+```http
+POST /translate            # a bare host:port gets this path appended
+Content-Type: application/json
+Authorization: Bearer …    # only when you set a key
+
+{
+  "instruction": "Translate the following 2 text(s) from Japanese to English. Reply with ONLY a JSON array of 2 translated strings, in the same order, no explanations, no code fences.",
+  "texts": ["こんにちは", "さようなら"],
+  "source": "ja",
+  "target": "en"
+}
+```
+
+```json
+{ "translations": ["Hello", "Goodbye"] }
+```
+
+Your server is assumed to be a **general LLM**, not a dedicated translation
+API, so the request carries an `instruction` naming the job, the language pair
+(using full language names — `zh-TW` would be meaningless to a model without its
+region) and the exact reply shape. A server can simply forward `instruction` +
+`texts` to its chat completion call; `texts` and `target` remain as the
+machine-readable fields.
+
+The reply is accepted in whichever form an LLM actually produces: the
+`{ "translations": [...] }` object above, a bare JSON array, or raw text with
+the array embedded in it (code fences and surrounding prose are stripped, and
+brackets inside translated strings are handled correctly). But
+`translations` must line up with `texts` one for one — the engine refuses a
+reply of a different length rather than pair the wrong string with the wrong
+speech bubble. `source` is omitted when the OCR language is unknown. The
+translated strings are then drawn over the original artwork locally, so the page
+looks exactly as it does with the free engine.
 
 **Engines in detail** — including how the free engine works without an account
 and what the Lara API does — are documented under
@@ -271,6 +320,28 @@ into one call per page. Lara bills real characters there — a manga page is
 usually 500–1,500 chars — so the free tier's 10k/month covers roughly 10–20
 pages, and Pro's 500k covers hundreds. Same credentials, same cache discipline,
 same locally-painted output as the Lens engine.
+
+### Lens OCR + your own local AI server
+
+The **`lens-local`** engine swaps only the translator. Detection and OCR are the
+same anonymous Lens crupload the free engine uses (the code is shared, not
+copied, so the two cannot drift); the resulting strings are then POSTed to a
+server the user runs themselves — `localTextUrl`, plus an optional bearer token.
+It returns **regions, not a bitmap**, so nothing about the rendering path
+changes: the content script redraws and replaces the text exactly as it does for
+the free engine. Because the target is a general LLM rather than a translation
+API, the request includes a generated `instruction` ("Translate the following N
+text(s) from Japanese to Chinese (Traditional) …") alongside the raw `texts`, and
+the reply parser tolerates the shapes models actually return (JSON object, bare
+array, or an array embedded in prose/code fences) while still requiring exact
+index alignment. The result is cached under a key that includes the server
+URL (`variantKey`), so pointing the extension at another host can never serve the
+first host's translations. A length mismatch throws instead of pairing by
+position, because a silent mis-pairing paints plausible-looking nonsense into
+speech bubbles. The engine is
+registered with `doesTranslation: true` (engines.js must not run the shared
+translator a second time) and reuses `lensEngine.js`'s `toUploadable` for the
+downscale/encode half.
 
 ### Icon, progress animation, usage meter
 

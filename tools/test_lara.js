@@ -117,7 +117,10 @@ globalThis.browser = {
     onChanged: { addListener: function () {} }
   }
 };
-// localImageEngine.js needs FormData/Blob/URL/AbortController at load time.
+// Stubs for what jsc lacks. laraEngine.js builds its multipart body by hand, so
+// FormData/Blob only have to exist; lensLocalEngine.js aborts a hung local
+// request after 120s, and jsc has setTimeout but neither AbortController nor
+// clearTimeout.
 globalThis.FormData = function () {
   this.fields = {};
   this.append = function (k, v, f) { this.fields[k] = { value: v, file: f }; };
@@ -125,6 +128,11 @@ globalThis.FormData = function () {
 globalThis.Blob = function (parts, opts) {
   this.parts = parts; this.type = (opts && opts.type) || '';
 };
+globalThis.AbortController = function () {
+  this.signal = { aborted: false };
+  this.abort = function () { this.signal.aborted = true; };
+};
+globalThis.clearTimeout = function () {};
 
 function jsonReply(status, body, headers) {
   return {
@@ -168,9 +176,14 @@ src = readFile('src/background/laraEngine.js');
 (0, eval)(src);
 if (typeof CTLaraEngine === 'undefined') throw new Error('CTLaraEngine did not load');
 if (typeof CTUsage === 'undefined') throw new Error('CTUsage did not load');
-src = readFile('src/background/localImageEngine.js');
+src = readFile('src/background/lensLocalEngine.js');
+// languages.js first, exactly as manifest.json and importScripts order it: the
+// engine reads CT_LANGUAGES to name the language pair in its instruction, and
+// without the table it silently degrades to raw codes ("ja" -> "ja").
+(0, eval)(readFile('src/shared/languages.js'));
 (0, eval)(src);
-if (typeof CTLocalImageEngine === 'undefined') throw new Error('CTLocalImageEngine did not load');
+if (typeof CTLensLocalEngine === 'undefined') throw new Error('CTLensLocalEngine did not load');
+if (typeof CT_LANGUAGES === 'undefined') throw new Error('CT_LANGUAGES did not load');
 
 var settings = {
   laraAccessKeyId: 'id',
@@ -433,59 +446,251 @@ async function main() {
   check('usage: reset clears everything',
         snap.textChars === 0 && snap.imageCount === 0 && snap.totalChars === 0);
 
-  // ── local image engine (self-hosted, Lara-image style) ────────────────
+  // ── lens-local engine: Lens OCR + the user's own translation server ───
+  // Translating is this engine's only change: Lens finds the text exactly as it
+  // does for the free engine, and the strings - never the image - go to the
+  // user's URL. The regions it returns are painted by the normal path.
   var threwLocal = null;
-  try { CTLocalImageEngine.requireEndpoint({}); } catch (e) { threwLocal = e; }
-  check('local: empty URL throws with guidance',
+  try { CTLensLocalEngine.requireEndpoint({}); } catch (e) { threwLocal = e; }
+  check('lens-local: empty URL throws with guidance',
         !!threwLocal && /server URL/i.test(threwLocal.message));
   threwLocal = null;
-  try { CTLocalImageEngine.requireEndpoint({ localImageUrl: 'ftp://x/y' }); }
+  try { CTLensLocalEngine.requireEndpoint({ localTextUrl: 'ftp://x/y' }); }
   catch (e) { threwLocal = e; }
-  check('local: non-http(s) rejected', !!threwLocal && /http/i.test(threwLocal.message));
-  eq('local: bare host gets default path',
-      CTLocalImageEngine.requireEndpoint({ localImageUrl: 'http://localhost:8000' }),
-      'http://localhost:8000/translate-image');
-  eq('local: explicit path kept',
-      CTLocalImageEngine.requireEndpoint({ localImageUrl: 'http://localhost:8000/custom' }),
+  check('lens-local: non-http(s) rejected', !!threwLocal && /http/i.test(threwLocal.message));
+  threwLocal = null;
+  try { CTLensLocalEngine.requireEndpoint({ localTextUrl: 'localhost:8000' }); }
+  catch (e) { threwLocal = e; }
+  check('lens-local: scheme-less string rejected',
+        !!threwLocal && /valid URL/i.test(threwLocal.message));
+  eq('lens-local: bare host gets the documented /translate path',
+      CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://localhost:8000' }),
+      'http://localhost:8000/translate');
+  eq('lens-local: a lone slash is normalised too',
+      CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://127.0.0.1:5000/' }),
+      'http://127.0.0.1:5000/translate');
+  eq('lens-local: explicit path kept',
+      CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://localhost:8000/custom' }),
       'http://localhost:8000/custom');
-  eq('local: free engine bills nothing', CTLocalImageEngine.free, true);
-  eq('local: needs no key', CTLocalImageEngine.needsKey, false);
+  eq('lens-local: free engine bills nothing', CTLensLocalEngine.free, true);
+  eq('lens-local: needs no key', CTLensLocalEngine.needsKey, false);
+  // Regions come back already translated, so engines.js must not run the shared
+  // translator on them a second time - that is what doesTranslation records.
+  eq('lens-local: translating is the engine\'s own job',
+      CTLensLocalEngine.doesTranslation, true);
+  eq('lens-local: stable engine id', CTLensLocalEngine.id, 'lens-local');
+  // Cache dimension: two servers must never share cache entries, and an unset
+  // URL must still produce a key - the helpful error belongs to the attempt,
+  // because engines.js builds the key before the engine ever runs.
+  eq('lens-local: variantKey is the trimmed URL',
+      CTLensLocalEngine.variantKey({ localTextUrl: ' http://box:9000 ' }), 'http://box:9000');
+  eq('lens-local: variantKey of an unset URL', CTLensLocalEngine.variantKey({}), '');
 
-  // binary image response passes through untouched
-  var binRes = imageReply(200, new Uint8Array([1, 2, 3]).buffer, 'image/png');
-  var parsed = await CTLocalImageEngine.parseImageResponse(binRes);
-  check('local: binary response bytes',
-        parsed.bytes.length === 3 && parsed.bytes[0] === 1);
-  // JSON base64 response decodes ('aGk=' is 'hi')
-  var jsonRes = {
-    ok: true, status: 200,
-    headers: { get: function () { return 'application/json'; } },
-    json: function () { return Promise.resolve({ image: 'aGk=', mime: 'image/png' }); }
-  };
-  parsed = await CTLocalImageEngine.parseImageResponse(jsonRes);
-  eq('local: json base64 decodes', bytesToString(parsed.bytes), 'hi');
-  // JSON data-URI response unwraps the mime too
-  var uriRes = {
-    ok: true, status: 200,
-    headers: { get: function () { return 'application/json'; } },
-    json: function () {
-      return Promise.resolve({ image: 'data:image/jpeg;base64,aGk=' });
+  // ── reply parsing: index alignment is the whole contract ──────────────
+  var tr = CTLensLocalEngine.parseReply({ translations: ['a', 'b'] }, 2);
+  check('lens-local: documented {translations} shape',
+        tr.length === 2 && tr[0] === 'a' && tr[1] === 'b');
+  tr = CTLensLocalEngine.parseReply(['x', null], 2);
+  check('lens-local: a bare array works, null becomes empty',
+        tr[0] === 'x' && tr[1] === '');
+  var threwParse = null;
+  try { CTLensLocalEngine.parseReply({ nope: 1 }, 2); } catch (e) { threwParse = e; }
+  check('lens-local: a reply with no translations array is rejected',
+        !!threwParse && /translations/.test(threwParse.message));
+  threwParse = null;
+  try { CTLensLocalEngine.parseReply({ translations: ['only one'] }, 2); }
+  catch (e) { threwParse = e; }
+  check('lens-local: length mismatch is an error, not a silent zip',
+        !!threwParse && /refusing to pair/.test(threwParse.message));
+
+  // ── end to end: Lens OCR -> strings to the local server -> regions ────
+  // The two Lens halves have their own suite, so they are stubbed here and the
+  // engine is driven once. That pins the entire contract: where the request
+  // goes, what rides in it (the strings, never the image), and the translations
+  // landing back on the boxes Lens found.
+  globalThis.CTLensEngine = {
+    toUploadable: function () {
+      return Promise.resolve({
+        bytes: new Uint8Array([1, 2, 3]), width: 100, height: 50, mime: 'image/jpeg'
+      });
     }
   };
-  parsed = await CTLocalImageEngine.parseImageResponse(uriRes);
-  check('local: data-uri mime unwrapped',
-        parsed.mime === 'image/jpeg' && bytesToString(parsed.bytes) === 'hi');
-  // JSON error shape (no image field) surfaces the server message
-  var errRes = {
-    ok: true, status: 200,
-    headers: { get: function () { return 'application/json'; } },
-    json: function () { return Promise.resolve({ message: 'no GPU today' }); }
+  globalThis.CTLensProto = {
+    scan: function () {
+      return Promise.resolve({
+        sourceLang: 'ja',
+        regions: [{ text: 'A' }, { text: 'B' }],
+        diagnostics: { lensCalls: 2 }
+      });
+    },
+    rescaleRegions: function (regions) { return regions; }
   };
-  var threwErr = null;
-  try { await CTLocalImageEngine.parseImageResponse(errRes); }
-  catch (e) { threwErr = e; }
-  check('local: error JSON surfaces message',
-        !!threwErr && /no GPU today/.test(threwErr.message));
+
+  var sawRequest = null;
+  fetchQueue.push(function (url, opts) {
+    sawRequest = { url: url, opts: opts, body: JSON.parse(opts.body) };
+    return jsonReply(200, { translations: ['Hello', 'Goodbye'] });
+  });
+
+  var out = await CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 100, height: 50,
+    sourceLang: 'auto', targetLang: 'en',
+    settings: { localTextUrl: 'http://localhost:8000', localTextApiKey: 'k' }
+  });
+
+  eq('lens-local: endpoint gets the default /translate path',
+     sawRequest.url, 'http://localhost:8000/translate');
+  check('lens-local: the strings are POSTed', sawRequest.opts.method === 'POST');
+  eq('lens-local: JSON content type',
+     sawRequest.opts.headers['Content-Type'], 'application/json');
+  eq('lens-local: the API key rides as a bearer token',
+     sawRequest.opts.headers.Authorization, 'Bearer k');
+  eq('lens-local: every OCR line is sent, in order',
+     sawRequest.body.texts.join(','), 'A,B');
+  eq('lens-local: the detected language is stated', sawRequest.body.source, 'ja');
+  eq('lens-local: the target language is stated', sawRequest.body.target, 'en');
+  check('lens-local: the instruction names the job and the language pair',
+        /Translate/i.test(sawRequest.body.instruction) &&
+        /Japanese/i.test(sawRequest.body.instruction) &&
+        /English/i.test(sawRequest.body.instruction));
+  check('lens-local: the instruction pins the output shape and count',
+        /ONLY a JSON array of 2/i.test(sawRequest.body.instruction) &&
+        /no explanations/i.test(sawRequest.body.instruction));
+  check('lens-local: not one image byte reaches the local server',
+        sawRequest.opts.body.indexOf('image') < 0);
+  // The engine's job ends at translated regions: the page redraws and replaces
+  // them the same way it does for the free engine.
+  eq('lens-local: two regions come back', out.regions.length, 2);
+  eq('lens-local: the first box is translated', out.regions[0].translated, 'Hello');
+  eq('lens-local: the second box is translated', out.regions[1].translated, 'Goodbye');
+  eq('lens-local: the original text is preserved', out.regions[0].text, 'A');
+  check('lens-local: no bitmap, so the usual painter path runs', !out.image);
+  eq('lens-local: diagnostics name the backend', out.diagnostics.backend, 'lens-local');
+  eq('lens-local: diagnostics name the server', out.diagnostics.endpoint,
+     'http://localhost:8000/translate');
+  check('lens-local: Lens diagnostics survive', out.diagnostics.lensCalls === 2);
+
+  // An unknown source language must be omitted, not sent as the literal "auto":
+  // no model wants to be told the input is in a language called auto.
+  sawRequest = null;
+  fetchQueue.push(function (url, opts) {
+    sawRequest = { body: JSON.parse(opts.body) };
+    return jsonReply(200, ['Hi']);
+  });
+  globalThis.CTLensProto.scan = function () {
+    return Promise.resolve({ sourceLang: 'auto', regions: [{ text: 'x' }], diagnostics: {} });
+  };
+  out = await CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+    sourceLang: 'auto', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+  });
+  check('lens-local: an unknown source language is omitted from the body',
+        !('source' in sawRequest.body));
+  check('lens-local: the instruction still names the target when source is unknown',
+        /original language/i.test(sawRequest.body.instruction) &&
+        /English/i.test(sawRequest.body.instruction));
+  check('lens-local: a bare JSON array reply is accepted',
+        out.regions[0].translated === 'Hi');
+
+  // A server that answers with the wrong number of lines must fail loudly:
+  // pairing them up anyway would paint the wrong words into speech bubbles.
+  // The scan stub above reports a single box, so widen it first - one line in,
+  // one line out is a match, and a match is not what is under test here.
+  globalThis.CTLensProto.scan = function () {
+    return Promise.resolve({
+      sourceLang: 'ja', regions: [{ text: 'x' }, { text: 'y' }], diagnostics: {}
+    });
+  };
+  fetchQueue.push(function () { return jsonReply(200, { translations: ['only'] }); });
+  var threwPair = null;
+  try {
+    await CTLensLocalEngine.imageToRegions({
+      bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+      sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+    });
+  } catch (e) { threwPair = e; }
+  check('lens-local: an unpaired reply fails loudly',
+        !!threwPair && /refusing to pair/.test(threwPair.message));
+
+  // ...and an unreachable server reports the URL the user typed, because that
+  // is the one thing they can act on.
+  fetchQueue.push(function () { throw new Error('connect ECONNREFUSED'); });
+  var threwDown = null;
+  try {
+    await CTLensLocalEngine.imageToRegions({
+      bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+      sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+    });
+  } catch (e) { threwDown = e; }
+  check('lens-local: an unreachable server names the URL',
+        !!threwDown && /http:\/\/l:1\/translate/.test(threwDown.message));
+
+  // ── a general LLM talks back: instruction + tolerant parsing ─────────
+  eq('lens-local: languageLabel resolves a shared-table code',
+      CTLensLocalEngine.languageLabel('ja'), 'Japanese');
+  eq('lens-local: languageLabel tags CJK regions without the table',
+      CTLensLocalEngine.languageLabel('zh-TW'), 'Chinese (Traditional)');
+  eq('lens-local: unknown codes pass through untouched',
+      CTLensLocalEngine.languageLabel('xx'), 'xx');
+  var instr = CTLensLocalEngine.buildInstruction(['a', 'b', 'c'], 'zh-TW', 'ja');
+  check('lens-local: instruction states job, pair and count',
+        /Translate the following 3/i.test(instr) &&
+        /Japanese/i.test(instr) && /Chinese \(Traditional\)/i.test(instr) &&
+        /ONLY a JSON array of 3/i.test(instr) && /no code fences/i.test(instr));
+  instr = CTLensLocalEngine.buildInstruction(['a'], 'en', 'auto');
+  check('lens-local: instruction never names a language called auto',
+        instr.indexOf('auto') < 0 && /original language/i.test(instr));
+  var found = CTLensLocalEngine.extractJsonArray(
+    'Sure! ```json\n["Hi there", "Bye"]\n``` Hope that helps.');
+  check('lens-local: an array inside prose/fences is recovered',
+        !!found && found.parsed.length === 2 && found.parsed[0] === 'Hi there');
+  check('lens-local: brackets inside quoted text do not break the scan',
+        CTLensLocalEngine.extractJsonArray('He said "[hi]" then ["a", "b"]').parsed[1] === 'b');
+  check('lens-local: pure prose yields nothing',
+        CTLensLocalEngine.extractJsonArray('hello there, no array here') === null);
+
+  // The raw-text fallback runs inside imageToRegions. jsonReply has no text(),
+  // so wrap it: a text/plain LLM answer carrying a fenced array must land.
+  globalThis.CTLensProto.scan = function () {
+    return Promise.resolve({
+      sourceLang: 'ja', regions: [{ text: 'x' }, { text: 'y' }], diagnostics: {}
+    });
+  };
+  fetchQueue.push(function () {
+    return {
+      ok: true, status: 200,
+      headers: { get: function () { return 'text/plain'; } },
+      json: function () { return Promise.reject(new Error('not json')); },
+      text: function () {
+        return Promise.resolve('Here you go:\n```json\n["one", "two"]\n```');
+      }
+    };
+  });
+  out = await CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+    sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+  });
+  check('lens-local: a fenced text/plain answer is translated, not rejected',
+        out.regions[0].translated === 'one' && out.regions[1].translated === 'two');
+
+  // ...but genuine chat prose still fails loudly instead of being guessed at.
+  fetchQueue.push(function () {
+    return {
+      ok: true, status: 200,
+      headers: { get: function () { return 'text/plain'; } },
+      json: function () { return Promise.reject(new Error('not json')); },
+      text: function () { return Promise.resolve('I cannot translate that, sorry.'); }
+    };
+  });
+  var threwChat = null;
+  try {
+    await CTLensLocalEngine.imageToRegions({
+      bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+      sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+    });
+  } catch (e) { threwChat = e; }
+  check('lens-local: prose with no array fails loudly',
+        !!threwChat && /not valid JSON/i.test(threwChat.message));
 
   print('');
   if (failed) {

@@ -17,9 +17,10 @@ if (typeof importScripts === 'function') {
     // are one level up. compat.js must come first: everything below assumes
     // `browser` exists, and on Chrome it does not until compat.js aliases it.
     importScripts('../shared/compat.js', '../shared/codec.js',
+                  '../shared/languages.js',
                   'settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'localImageEngine.js', 'engines.js');
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -192,17 +193,22 @@ async function handle(msg, sender) {
       return { ok: true, expiresAt: CTLaraEngine.tokenExpiry(bearer) || 0 };
     }
 
-    case 'CT_LOCAL_IMAGE_PROBE': {
-      // Free connectivity check against the user's own server: validates the
-      // URL shape without sending any image. The server answers GET with any
-      // 2xx/4xx to prove it is alive (a 404 on /translate-image still means a
-      // live server that only accepts POST).
-      const endpoint = CTLocalImageEngine.requireEndpoint(settings);
+    case 'CT_LOCAL_TEXT_PROBE': {
+      // Free connectivity check against the user's own server. It validates the
+      // URL shape and proves the server is alive WITHOUT sending an image or any
+      // OCR text: an empty `texts` array is the one request every implementation
+      // of the documented contract must answer, and any reply - 200, or an error
+      // status for the empty body - proves the server is up and listening.
+      const endpoint = CTLensLocalEngine.requireEndpoint(settings);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 10000);
       try {
-        const res = await fetch(endpoint,
-          { method: 'GET', signal: ctrl.signal });
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: [], target: 'en' }),
+          signal: ctrl.signal
+        });
         return { ok: true, status: res.status };
       } catch (e) {
         throw new Error('Cannot reach the local server at ' + endpoint +

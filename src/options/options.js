@@ -12,7 +12,7 @@ const FIELDS = [
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
   'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap',
-  'localImageUrl', 'localImageApiKey'
+  'localTextUrl', 'localTextApiKey'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -72,16 +72,18 @@ function fillEngines(engines, selected) {
             'covers roughly 10-20 pages. Same Lara credentials below.'
           : current.needsKey
             ? 'This engine needs an API key before it will work.'
-            : current.id === 'local-image'
-              ? 'Sends page images to the server URL below (your machine only) and ' +
-                'shows the translated bitmap it returns. Needs no key; enter ' +
-                'the URL, then use "Test local server".'
+            : current.id === 'lens-local'
+              ? 'Google Lens finds the text boxes and reads the characters for ' +
+                'free; only those strings are POSTed to the server URL below ' +
+                '(your machine only) to be translated, and the result is drawn ' +
+                'onto the page exactly like the free engine. Enter the URL, then ' +
+                'use "Test local server".'
               : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
                 'without notice.')
     : '';
   el('lara-fields').hidden = !(current &&
     (current.id === 'lara' || current.id === 'lens-lara'));
-  el('local-image-fields').hidden = !(current && current.id === 'local-image');
+  el('lens-local-fields').hidden = !(current && current.id === 'lens-local');
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */
@@ -121,8 +123,8 @@ async function load() {
   el('laraAccessKeySecret').value = s.laraAccessKeySecret || '';
   el('laraModel').value = s.laraModel || 'inpainting';
   el('laraMonthlyCap').value = s.laraMonthlyCap || 10000;
-  el('localImageUrl').value = s.localImageUrl || '';
-  el('localImageApiKey').value = s.localImageApiKey || '';
+  el('localTextUrl').value = s.localTextUrl || '';
+  el('localTextApiKey').value = s.localTextApiKey || '';
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
   renderUsage();
 }
@@ -208,16 +210,17 @@ el('engineId').addEventListener('change', () => {
   });
 });
 
-el('local-image-probe').addEventListener('click', async () => {
-  const note = el('local-image-probe-result');
+el('lens-local-probe').addEventListener('click', async () => {
+  const note = el('lens-local-probe-result');
   note.textContent = 'Checking…';
   try {
-    // Save first: the probe connects to whatever URL is in the field now,
-    // without sending any image.
-    await save({ localImageUrl: el('localImageUrl').value.trim() });
-    const data = await bg('CT_LOCAL_IMAGE_PROBE');
-    note.textContent = data.status === 404
-      ? 'Server is reachable (returned 404 on GET — it likely only accepts POST, which is fine).'
+    // Save first: the probe talks to whatever URL is in the field now. It sends
+    // no page text - only an empty request that proves the server is listening.
+    await save({ localTextUrl: el('localTextUrl').value.trim() });
+    const data = await bg('CT_LOCAL_TEXT_PROBE');
+    note.textContent = data.status === 404 || data.status === 405
+      ? 'Server is reachable (HTTP ' + data.status + ') — it does not accept ' +
+        'POST on this path; check the URL and the method.'
       : 'Server is reachable (HTTP ' + data.status + ').';
   } catch (e) {
     note.textContent = 'Failed: ' + e.message;
