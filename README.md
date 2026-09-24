@@ -329,19 +329,57 @@ copied, so the two cannot drift); the resulting strings are then POSTed to a
 server the user runs themselves — `localTextUrl`, plus an optional bearer token.
 It returns **regions, not a bitmap**, so nothing about the rendering path
 changes: the content script redraws and replaces the text exactly as it does for
-the free engine. Because the target is a general LLM rather than a translation
-API, the request includes a generated `instruction` ("Translate the following N
-text(s) from Japanese to Chinese (Traditional) …") alongside the raw `texts`, and
-the reply parser tolerates the shapes models actually return (JSON object, bare
-array, or an array embedded in prose/code fences) while still requiring exact
-index alignment. The result is cached under a key that includes the server
-URL (`variantKey`), so pointing the extension at another host can never serve the
-first host's translations. A length mismatch throws instead of pairing by
-position, because a silent mis-pairing paints plausible-looking nonsense into
-speech bubbles. The engine is
-registered with `doesTranslation: true` (engines.js must not run the shared
-translator a second time) and reuses `lensEngine.js`'s `toUploadable` for the
-downscale/encode half.
+the free engine. Cache hits skip the server entirely, and because the engine is
+self-hosted nothing is metered — the usage meter stays at zero for it.
+
+**Pointing it at an LLM server (LM Studio, Ollama, vLLM, llama.cpp).** The target
+is a *general* model, not a translation API, so the request has to say what it
+wants. A bare host is assumed to be an OpenAI-compatible chat server and gets
+`/v1/chat/completions` appended, which is what LM Studio, Ollama's OpenAI
+listener, vLLM and llama.cpp all expose by default. Give the full path
+explicitly for anything else — `http://box:8000/translate` for a hand-written
+shim, or `http://box:11434/api/chat` for Ollama's native route.
+
+The **instruction is the first line of the message**, outside any JSON, followed
+by the source strings as a JSON array on the second line:
+
+```
+Translate the following 3 text(s) from Japanese to English. Reply with ONLY a JSON array of 3 translated strings, in the same order, no explanations, no code fences.
+["こんにちは","またね","どこへ行くの？"]
+```
+
+A general LLM asked to "translate" will otherwise narrate, ask which language,
+or return an object; naming the job, both languages, the count and the exact
+output shape in one line is what makes the answer usable. `texts`, `source` and
+`target` also ride along in the JSON body for dedicated translation shims.
+
+Replies are parsed leniently on the way in and strictly on the way out. Accepted:
+`{"translations":[…]}`, a bare array, an OpenAI `chat.completion` envelope
+(`choices[0].message.content`), or an array embedded in prose or a code fence —
+each recovered by a brace-balance scan, not a regex, so brackets inside
+translated strings survive. Two guards matter:
+
+- **The assistant's `content` is read, never the whole body.** Reasoning models
+  (Gemma, DeepSeek-R1 and friends) emit a `reasoning_content` field that quotes
+  the *source* text back while they think. Scanning the body for the first array
+  would find that half and paint the untranslated original into every speech
+  bubble with no error anywhere.
+- **A length mismatch throws instead of pairing by position**, because a silent
+  mis-pairing puts plausible-looking nonsense in the wrong bubble — worse than a
+  visible failure.
+
+Servers that answer a bad route with **HTTP 200 and an error body** (LM Studio
+does: `{"error":"Unexpected endpoint or method."}`) have that message surfaced,
+rather than being reported as "no translations array" and sending the user
+hunting for a server that is answering perfectly well.
+
+**Test local server** validates the URL and lists the models the server offers
+(`/v1/models`, or `/api/tags` for Ollama) so the model id does not have to be
+copied out of the server's own UI. The reply is cached under a key that includes
+the server URL (`variantKey`), so pointing the extension at another host can never
+serve the first host's translations. The engine is registered with
+`doesTranslation: true` (engines.js must not run the shared translator a second
+time) and reuses `lensEngine.js`'s `toUploadable` for the downscale/encode half.
 
 ### Icon, progress animation, usage meter
 

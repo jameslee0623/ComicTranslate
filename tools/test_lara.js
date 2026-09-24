@@ -134,14 +134,21 @@ globalThis.AbortController = function () {
 };
 globalThis.clearTimeout = function () {};
 
+// Model a real Response, which has exactly ONE consumable body. The engine
+// reads text() first and parses by hand, so the body must serialise to the same
+// JSON that json() would have produced - a stub with only json() made every
+// successful local-server reply look empty.
 function jsonReply(status, body, headers) {
+  var serialised;
+  try { serialised = JSON.stringify(body); } catch (e) { serialised = ''; }
   return {
     ok: status >= 200 && status < 300,
     status: status,
     headers: {
       get: function (n) { return (headers || {})[String(n).toLowerCase()] || null; }
     },
-    json: function () { return Promise.resolve(body); }
+    json: function () { return Promise.resolve(body); },
+    text: function () { return Promise.resolve(serialised); }
   };
 }
 function imageReply(status, bytes, mime) {
@@ -463,15 +470,81 @@ async function main() {
   catch (e) { threwLocal = e; }
   check('lens-local: scheme-less string rejected',
         !!threwLocal && /valid URL/i.test(threwLocal.message));
-  eq('lens-local: bare host gets the documented /translate path',
+  // LM Studio, Ollama's OpenAI listener, vLLM and llama.cpp's server all expose
+  // the OpenAI-compatible chat route by default, so a bare host is assumed to be
+  // one of those. A hand-written shim keeps working by giving its path explicitly.
+  eq('lens-local: bare host defaults to the OpenAI-compatible chat route',
       CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://localhost:8000' }),
-      'http://localhost:8000/translate');
+      'http://localhost:8000/v1/chat/completions');
   eq('lens-local: a lone slash is normalised too',
       CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://127.0.0.1:5000/' }),
-      'http://127.0.0.1:5000/translate');
-  eq('lens-local: explicit path kept',
-      CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://localhost:8000/custom' }),
-      'http://localhost:8000/custom');
+      'http://127.0.0.1:5000/v1/chat/completions');
+  eq('lens-local: an explicit shim path is kept, not rewritten',
+      CTLensLocalEngine.requireEndpoint({ localTextUrl: 'http://localhost:8000/translate' }),
+      'http://localhost:8000/translate');
+  // A chat route is wrapped in the JSON messages envelope; a text route is posted
+  // raw, because the body IS the prompt. The URL is the only thing that decides.
+  check('lens-local: a chat URL is detected as chat',
+      CTLensLocalEngine.isChatEndpoint('http://lmserver.local:1234/v1/chat/completions') &&
+      CTLensLocalEngine.isChatEndpoint('http://lmserver.local:11434/api/chat') &&
+      !CTLensLocalEngine.isChatEndpoint('http://lmserver.local:8000/translate'));
+  eq('lens-local: the model list is derived from the chat route',
+      CTLensLocalEngine.modelsEndpoint('http://lmserver.local:1234/v1/chat/completions'),
+      'http://lmserver.local:1234/v1/models');
+  eq('lens-local: Ollama native pairs with /api/tags',
+      CTLensLocalEngine.modelsEndpoint('http://lmserver.local:11434/api/chat'),
+      'http://lmserver.local:11434/api/tags');
+  eq('lens-local: a text route has no model list',
+      CTLensLocalEngine.modelsEndpoint('http://lmserver.local:8000/translate'), null);
+  var chatReq = CTLensLocalEngine.buildRequest(
+    'http://lmserver.local:1234/v1/chat/completions', 'PROMPT', ['a'], 'en', 'ja',
+    { localTextModel: 'google/gemma-4-12b' });
+  check('lens-local: a chat route sends the OpenAI messages envelope',
+        chatReq.chat === true &&
+        JSON.parse(chatReq.body).messages[0].content === 'PROMPT' &&
+        JSON.parse(chatReq.body).model === 'google/gemma-4-12b' &&
+        JSON.parse(chatReq.body).temperature === 0);
+  var textReq = CTLensLocalEngine.buildRequest(
+    'http://x:8000/translate', 'PROMPT', ['a'], 'en', 'ja', {});
+  check('lens-local: a text route posts the prompt raw, not as JSON',
+        textReq.chat === false && textReq.body === 'PROMPT' &&
+        /text\/plain/.test(textReq.headers['Content-Type']));
+
+  // ── live LM Studio replies (captured from google/gemma-4-12b) ───────────
+  // LM Studio is an OpenAI-compatible server, so it answers with a
+  // chat.completion envelope. Gemma also emits a `reasoning_content` field that
+  // quotes the SOURCE text back while it thinks. Scanning the whole body for an
+  // array would find that reasoning half first and paint the untranslated
+  // original into every speech bubble with no error anywhere - so the parser
+  // must read message.content and nothing else. This is the real captured body.
+  var lmReply = JSON.stringify({
+    id: 'chatcmpl-8c2jzbc', object: 'chat.completion', model: 'google/gemma-4-12b',
+    choices: [{ index: 0, message: {
+      role: 'assistant',
+      content: '["Hello", "See you later", "Where are you going?"]',
+      reasoning_content: '\n* Input: Three Japanese phrases.\n* Source Texts: "こんにちは", "またね", "どこへ行くの？"\n* 1. Hello'
+    }, finish_reason: 'stop' }]
+  });
+  var lmOut = CTLensLocalEngine.parseBody(lmReply, 3);
+  check('lens-local: a real LM Studio chat envelope parses',
+        lmOut.length === 3 && lmOut[0] === 'Hello' &&
+        lmOut[2] === 'Where are you going?');
+  check('lens-local: reasoning_content quoting the source never wins',
+        lmOut.indexOf('こんにちは') < 0 && lmOut.indexOf('またね') < 0);
+
+  // LM Studio answers an UNKNOWN ROUTE with HTTP 200 and an error body. Reading
+  // it as a reply would report "no translations array" and hide the real reason.
+  var lmErr = CTLensLocalEngine.serverErrorMessage(
+    { error: 'Unexpected endpoint or method. (POST /translate)' });
+  check('lens-local: a route error is surfaced, not swallowed',
+        /Unexpected endpoint/.test(lmErr || ''));
+  // A genuine mismatch must still throw rather than zip - mis-pairing would put
+  // plausible wrong text in the wrong bubble, which is worse than a visible error.
+  var mismatch = null;
+  try { CTLensLocalEngine.parseBody(lmReply, 7); } catch (e) { mismatch = e; }
+  check('lens-local: a length mismatch throws instead of zipping',
+        !!mismatch && /7/.test(mismatch.message));
+
   eq('lens-local: free engine bills nothing', CTLensLocalEngine.free, true);
   eq('lens-local: needs no key', CTLensLocalEngine.needsKey, false);
   // Regions come back already translated, so engines.js must not run the shared
@@ -538,8 +611,8 @@ async function main() {
     settings: { localTextUrl: 'http://localhost:8000', localTextApiKey: 'k' }
   });
 
-  eq('lens-local: endpoint gets the default /translate path',
-     sawRequest.url, 'http://localhost:8000/translate');
+  eq('lens-local: a bare host is POSTed as a chat request',
+     sawRequest.url, 'http://localhost:8000/v1/chat/completions');
   check('lens-local: the strings are POSTed', sawRequest.opts.method === 'POST');
   eq('lens-local: JSON content type',
      sawRequest.opts.headers['Content-Type'], 'application/json');
@@ -549,13 +622,22 @@ async function main() {
      sawRequest.body.texts.join(','), 'A,B');
   eq('lens-local: the detected language is stated', sawRequest.body.source, 'ja');
   eq('lens-local: the target language is stated', sawRequest.body.target, 'en');
+  // A general LLM is a chat endpoint, not a translation API: the instruction must
+  // be the FIRST LINE of the message, outside any JSON field, or it answers the
+  // question nobody asked. The strings ride as the JSON array on line 2.
+  var prompt = sawRequest.body.messages[0].content;
+  var promptLines = prompt.split('\n');
+  check('lens-local: the instruction is the first line, outside the JSON',
+        /Translate the following 2/i.test(promptLines[0]) &&
+        promptLines[0].indexOf('[') < 0 &&
+        promptLines[1] === '["A","B"]');
   check('lens-local: the instruction names the job and the language pair',
-        /Translate/i.test(sawRequest.body.instruction) &&
-        /Japanese/i.test(sawRequest.body.instruction) &&
-        /English/i.test(sawRequest.body.instruction));
+        /Translate/i.test(promptLines[0]) &&
+        /Japanese/i.test(promptLines[0]) &&
+        /English/i.test(promptLines[0]));
   check('lens-local: the instruction pins the output shape and count',
-        /ONLY a JSON array of 2/i.test(sawRequest.body.instruction) &&
-        /no explanations/i.test(sawRequest.body.instruction));
+        /ONLY a JSON array of 2/i.test(promptLines[0]) &&
+        /no code fences/i.test(promptLines[0]));
   check('lens-local: not one image byte reaches the local server',
         sawRequest.opts.body.indexOf('image') < 0);
   // The engine's job ends at translated regions: the page redraws and replaces
@@ -567,7 +649,7 @@ async function main() {
   check('lens-local: no bitmap, so the usual painter path runs', !out.image);
   eq('lens-local: diagnostics name the backend', out.diagnostics.backend, 'lens-local');
   eq('lens-local: diagnostics name the server', out.diagnostics.endpoint,
-     'http://localhost:8000/translate');
+     'http://localhost:8000/v1/chat/completions');
   check('lens-local: Lens diagnostics survive', out.diagnostics.lensCalls === 2);
 
   // An unknown source language must be omitted, not sent as the literal "auto":
@@ -587,8 +669,8 @@ async function main() {
   check('lens-local: an unknown source language is omitted from the body',
         !('source' in sawRequest.body));
   check('lens-local: the instruction still names the target when source is unknown',
-        /original language/i.test(sawRequest.body.instruction) &&
-        /English/i.test(sawRequest.body.instruction));
+        /original language/i.test(sawRequest.body.messages[0].content) &&
+        /English/i.test(sawRequest.body.messages[0].content));
   check('lens-local: a bare JSON array reply is accepted',
         out.regions[0].translated === 'Hi');
 
@@ -613,7 +695,8 @@ async function main() {
         !!threwPair && /refusing to pair/.test(threwPair.message));
 
   // ...and an unreachable server reports the URL the user typed, because that
-  // is the one thing they can act on.
+  // is the one thing they can act on. The bare host is reported fully resolved,
+  // since a path-less URL is what they need checking against the server's routes.
   fetchQueue.push(function () { throw new Error('connect ECONNREFUSED'); });
   var threwDown = null;
   try {
@@ -623,7 +706,7 @@ async function main() {
     });
   } catch (e) { threwDown = e; }
   check('lens-local: an unreachable server names the URL',
-        !!threwDown && /http:\/\/l:1\/translate/.test(threwDown.message));
+        !!threwDown && /http:\/\/l:1\/v1\/chat\/completions/.test(threwDown.message));
 
   // ── a general LLM talks back: instruction + tolerant parsing ─────────
   eq('lens-local: languageLabel resolves a shared-table code',
@@ -691,6 +774,40 @@ async function main() {
   } catch (e) { threwChat = e; }
   check('lens-local: prose with no array fails loudly',
         !!threwChat && /not valid JSON/i.test(threwChat.message));
+
+  // Regression: a real Response consumes its body once. json() reads the stream
+  // and then fails to parse, so the later text() rejects with "body already
+  // read" - which is the ONLY way a text/plain LLM reply can arrive. The stub
+  // above gave json() and text() independent bodies, so it passed while the real
+  // request could never work. Model the consumed stream exactly.
+  fetchQueue.push(function () {
+    var consumed = false;
+    return {
+      ok: true, status: 200,
+      headers: { get: function () { return 'text/plain'; } },
+      json: function () {
+        consumed = true;
+        return Promise.reject(new SyntaxError('Unexpected token in JSON'));
+      },
+      text: function () {
+        if (consumed) {
+          return Promise.reject(new TypeError('body stream already read'));
+        }
+        return Promise.resolve('```json\n["one", "two"]\n```');
+      }
+    };
+  });
+  var outConsumed = null;
+  try {
+    outConsumed = await CTLensLocalEngine.imageToRegions({
+      bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+      sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+    });
+  } catch (e) { outConsumed = e; }
+  check('lens-local: a real consumed-body Response still yields translations',
+        !!(outConsumed && outConsumed.regions) &&
+        outConsumed.regions[0].translated === 'one' &&
+        outConsumed.regions[1].translated === 'two');
 
   print('');
   if (failed) {
