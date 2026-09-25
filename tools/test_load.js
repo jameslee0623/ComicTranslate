@@ -88,7 +88,7 @@ globalThis.browser = {
   }
 };
 
-var SHARED = ['compat.js', 'codec.js', 'languages.js'];
+var SHARED = ['compat.js', 'codec.js', 'languages.js', 'i18n.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
                   'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js', 'background.js'];
@@ -157,7 +157,8 @@ var EXPECTED = {
                    'imgCandidate', 'backgroundCandidate'],
   CTReplace: ['apply', 'applyImageBytes', 'restoreElement', 'restoreAll', 'mountOverlay',
               'unmountOverlay', 'canvasToBlobUrl', 'count'],
-  CTCodec: ['toBase64', 'fromBase64', 'packReply', 'unpackReply']
+  CTCodec: ['toBase64', 'fromBase64', 'packReply', 'unpackReply'],
+  CTI18n: ['normalise', 'browserLanguage', 'init', 't', 'interpolate', 'apply']
 };
 
 print('');

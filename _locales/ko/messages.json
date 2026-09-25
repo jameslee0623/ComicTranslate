@@ -1,0 +1,403 @@
+{
+  "extensionName": {
+    "message": "ComicTranslate",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "이미지와 만화 속 글자를 제자리에서 번역하고 이미지를 번역본으로 교체하는 브라우저 확장 프로그램입니다.",
+    "description": "Extension description"
+  },
+  "popup_enabled": {
+    "message": "사용"
+  },
+  "popup_checking_page": {
+    "message": "페이지 확인 중…"
+  },
+  "popup_add_site": {
+    "message": "이 사이트를 번역 목록에 추가"
+  },
+  "popup_remove_site": {
+    "message": "Remove this site from the translating list"
+  },
+  "popup_translate_into": {
+    "message": "번역 언어"
+  },
+  "popup_engine": {
+    "message": "번역 엔진"
+  },
+  "popup_sites": {
+    "message": "사이트"
+  },
+  "popup_translate_now": {
+    "message": "지금 번역"
+  },
+  "popup_restore_page": {
+    "message": "페이지 복원"
+  },
+  "popup_ready": {
+    "message": "준비됨"
+  },
+  "popup_settings": {
+    "message": "설정"
+  },
+  "popup_clear_cache": {
+    "message": "캐시 지우기"
+  },
+  "popup_page_translating": {
+    "message": "페이지 번역 중…"
+  },
+  "popup_page_paused": {
+    "message": "일시 중지: 확장 프로그램이 비활성화되었습니다."
+  },
+  "popup_page_allowed": {
+    "message": "Active on this site."
+  },
+  "popup_page_ignored": {
+    "message": "Not translating: site not in your list."
+  },
+  "popup_page_restricted": {
+    "message": "브라우저 특수 페이지(번역할 수 없음)."
+  },
+  "popup_site_all": {
+    "message": "All sites are active."
+  },
+  "popup_site_blocked": {
+    "message": "{host}은(는) 차단 목록에 있어 번역되지 않습니다."
+  },
+  "popup_site_not_in_list": {
+    "message": "{host}은(는) 목록에 없어 번역되지 않습니다."
+  },
+  "popup_site_in_list": {
+    "message": "{host}은(는) 번역 목록에 있습니다."
+  },
+  "popup_clearing_cache": {
+    "message": "Clearing cache…"
+  },
+  "popup_cache_cleared": {
+    "message": "Cache cleared."
+  },
+  "popup_cache_clear_failed": {
+    "message": "Failed to clear cache: {error}"
+  },
+  "popup_translating_now": {
+    "message": "Translating now…"
+  },
+  "popup_restoring_page": {
+    "message": "Restoring page…"
+  },
+  "popup_page_restored": {
+    "message": "Page restored."
+  },
+  "popup_restore_failed": {
+    "message": "Restore failed: {error}"
+  },
+  "popup_translate_this_site": {
+    "message": "이 사이트 번역"
+  },
+  "popup_no_page": {
+    "message": "사용 가능한 페이지가 없습니다."
+  },
+  "popup_site_translated": {
+    "message": "{host}은(는) 번역됩니다(차단 목록에 없음)."
+  },
+  "popup_remove_from_blocklist": {
+    "message": "차단 목록에서 제거"
+  },
+  "popup_block_site": {
+    "message": "이 사이트 차단"
+  },
+  "popup_remove_site_named": {
+    "message": "{host}을(를) 번역 목록에서 제거"
+  },
+  "popup_active_on": {
+    "message": "{host}에서 활성"
+  },
+  "popup_excluded_on": {
+    "message": "{host}은(는) 제외되었습니다(설정 확인)."
+  },
+  "popup_reload_page": {
+    "message": "활성화하려면 페이지를 새로고침하세요."
+  },
+  "popup_site_list_updated": {
+    "message": "사이트 목록을 업데이트했습니다."
+  },
+  "popup_restored": {
+    "message": "이미지 {count}개를 복원했습니다."
+  },
+  "popup_error": {
+    "message": "오류: {error}"
+  },
+  "popup_usage": {
+    "message": "Lara 이번 달: {total} / {cap}자(텍스트 {text} + 이미지 {images}개 ×10k)."
+  },
+  "popup_summary": {
+    "message": "이 페이지: {translated}개 번역, {failed}개 실패, {skipped}개 건너뜀.{quota}{error}"
+  },
+  "engine_lara": {
+    "message": "Lara 이미지(공식)"
+  },
+  "engine_lens_lara": {
+    "message": "Lens + Lara 텍스트"
+  },
+  "engine_lens": {
+    "message": "Google Lens(무료)"
+  },
+  "engine_lens_local": {
+    "message": "Lens OCR + 내 로컬 AI"
+  },
+  "popup_summary_prefix": {
+    "message": "On this page: "
+  },
+  "popup_summary_translated": {
+    "message": " translated, "
+  },
+  "popup_summary_failed": {
+    "message": " failed, "
+  },
+  "popup_summary_skipped": {
+    "message": " skipped."
+  },
+  "popup_summary_quota_stopped": {
+    "message": " Lara 한도에 도달하여 중지되었습니다."
+  },
+  "popup_summary_last_error": {
+    "message": " 마지막 오류: "
+  },
+  "engine_note_lara": {
+    "message": "공식 API입니다. 이미지당 10,000문자로 고정 과금되므로 40페이지면 약 400,000문자입니다. 설정에서 자격 증명을 입력하세요."
+  },
+  "engine_note_lens_lara": {
+    "message": "공식 API 텍스트 모드입니다. 전송한 문자 수로 과금됩니다. 설정에서 자격 증명을 입력하세요."
+  },
+  "engine_note_lens": {
+    "message": "API 키가 필요 없습니다. Google의 문서화되지 않은 엔드포인트를 사용하므로 예고 없이 변경될 수 있습니다."
+  },
+  "engine_note_lens_local": {
+    "message": "Lens가 글자를 무료로 읽고 추출한 문자열만 내 로컬 서버로 보냅니다. 설정에서 URL을 입력하세요."
+  },
+  "engine_note_needs_key": {
+    "message": "API 키가 필요합니다(설정)."
+  },
+  "engine_note_none_needed": {
+    "message": "API 키가 필요 없습니다."
+  },
+  "options_lara_placeholder": {
+    "message": "app.laratranslate.com/account/credentials에서 받기"
+  },
+  "options_loading": {
+    "message": "불러오는 중…"
+  },
+  "options_ui_language": {
+    "message": "인터페이스 언어"
+  },
+  "options_ui_auto": {
+    "message": "브라우저와 일치"
+  },
+  "options_saved": {
+    "message": "저장했습니다."
+  },
+  "options_unknown": {
+    "message": "알 수 없음"
+  },
+  "options_usage_details": {
+    "message": "텍스트 {text}자 + 이미지 {images}개 ×10,000 = {total} / {cap}자(이번 달)"
+  },
+  "options_usage_error": {
+    "message": "사용량을 불러오지 못했습니다: "
+  },
+  "options_load_error": {
+    "message": "설정을 불러오지 못했습니다: "
+  },
+  "options_server_bad_method": {
+    "message": "서버에 연결됨(HTTP {status}). 이 경로는 POST를 허용하지 않습니다."
+  },
+  "options_server_reachable_detail": {
+    "message": "서버에 연결됨(HTTP {status})."
+  },
+  "options_title": {
+    "message": "ComicTranslate — 설정"
+  },
+  "options_heading": {
+    "message": "ComicTranslate 설정"
+  },
+  "options_languages": {
+    "message": "언어"
+  },
+  "options_source_lang": {
+    "message": "원본 언어"
+  },
+  "options_lara_help": {
+    "message": "Lara 이미지 엔진은 이미지당 10,000문자로 고정 과금됩니다. Lens OCR + Lara 텍스트는 실제 전송한 문자만 사용합니다.<a href=\"https://app.laratranslate.com/account/credentials\" target=\"_blank\" rel=\"noreferrer\">자격 증명 받기</a>."
+  },
+  "options_get_credentials": {
+    "message": "자격 증명 받기"
+  },
+  "options_test_lara": {
+    "message": "Lara 자격 증명 테스트"
+  },
+  "options_local_url": {
+    "message": "로컬 서버 URL"
+  },
+  "options_local_api_key": {
+    "message": "API 키(선택 사항)"
+  },
+  "options_local_api_key_placeholder": {
+    "message": "서버에서 Bearer 토큰을 요구하는 경우에만 입력"
+  },
+  "options_local_help_1": {
+    "message": "Google Lens가 글자를 읽고 추출한 문자열만 로컬 서버로 보냅니다. 서버는 입력과 같은 순서의 JSON 번역 배열을 반환해야 합니다. LM Studio, Ollama, vLLM, llama.cpp를 지원합니다. 원본 이미지는 브라우저를 벗어나지 않습니다."
+  },
+  "options_local_help_2": {
+    "message": "LM Studio의 추론 모델을 사용할 때는 Developer Settings에서 reasoning_content와 content 분리를 끄세요. 작은 instruct 모델이 더 빠릅니다. 페이지를 바꾸면 실행 중인 번역이 취소됩니다."
+  },
+  "options_test_local": {
+    "message": "로컬 서버 테스트"
+  },
+  "options_rendering": {
+    "message": "렌더링"
+  },
+  "options_font_family": {
+    "message": "글꼴(비워 두면 내장 글꼴 사용)"
+  },
+  "options_font_family_placeholder": {
+    "message": "e.g. Comic Neue, sans-serif"
+  },
+  "options_text_stroke": {
+    "message": "번역 텍스트에 테두리 표시"
+  },
+  "options_scan_backgrounds": {
+    "message": "CSS 배경 이미지도 번역"
+  },
+  "options_limits": {
+    "message": "제한"
+  },
+  "options_min_image_size": {
+    "message": "최소 이미지 크기(px)"
+  },
+  "options_max_images": {
+    "message": "페이지당 최대 이미지 수"
+  },
+  "options_request_delay": {
+    "message": "요청 간격(ms)"
+  },
+  "options_delay_hint": {
+    "message": "간격이 짧으면 Google이 빠르게 제한합니다. 1500 ms 이상을 권장합니다."
+  },
+  "options_privacy": {
+    "message": "개인정보"
+  },
+  "options_privacy_text": {
+    "message": "처리하는 이미지는 OCR 및 번역을 위해 Google로 전송됩니다. 요청은 익명이며 쿠키나 계정 정보는 보내지 않습니다."
+  },
+  "options_sites": {
+    "message": "사이트"
+  },
+  "options_apply_to": {
+    "message": "적용 대상"
+  },
+  "options_domain_mode_all": {
+    "message": "모든 사이트"
+  },
+  "options_domain_mode_blocklist": {
+    "message": "목록을 제외한 모든 사이트"
+  },
+  "options_domain_mode_allowlist": {
+    "message": "목록의 사이트만"
+  },
+  "options_domains_label": {
+    "message": "도메인(한 줄에 하나, 접미사 일치)"
+  },
+  "options_cache": {
+    "message": "캐시"
+  },
+  "options_cache_ttl": {
+    "message": "결과 보관 기간(일, 0이면 저장 안 함)"
+  },
+  "options_clear_cache_btn": {
+    "message": "번역 캐시 지우기"
+  },
+  "options_lara_usage": {
+    "message": "Lara 사용량"
+  },
+  "options_lara_usage_desc": {
+    "message": "이번 달 Lara 엔진의 사용량입니다."
+  },
+  "options_monthly_cap": {
+    "message": "월 한도 참고값(문자)"
+  },
+  "options_reset_usage": {
+    "message": "카운터 초기화"
+  },
+  "options_advanced": {
+    "message": "고급"
+  },
+  "options_debug_logging": {
+    "message": "백그라운드 콘솔에 상세 로그 출력"
+  },
+  "options_save_notice": {
+    "message": "변경 사항은 즉시 저장됩니다."
+  },
+  "options_testing": {
+    "message": "테스트 중…"
+  },
+  "options_testing_creds": {
+    "message": "자격 증명 테스트 중…"
+  },
+  "options_creds_valid": {
+    "message": "자격 증명이 유효합니다. 토큰 만료: "
+  },
+  "options_creds_invalid": {
+    "message": "자격 증명이 거부되었습니다: "
+  },
+  "options_server_reachable": {
+    "message": "서버에 연결됨"
+  },
+  "options_server_failed": {
+    "message": "서버 확인 실패: "
+  },
+  "options_cache_cleared_msg": {
+    "message": "캐시를 지웠습니다."
+  },
+  "options_cache_clear_err": {
+    "message": "실패: "
+  },
+  "options_counter_reset": {
+    "message": "카운터를 초기화했습니다."
+  },
+  "options_counter_reset_err": {
+    "message": "초기화 실패: "
+  },
+  "options_detect_auto": {
+    "message": "자동 감지"
+  },
+  "options_target_lang": {
+    "message": "번역 언어"
+  },
+  "options_engine": {
+    "message": "엔진"
+  },
+  "options_engine_label": {
+    "message": "OCR 및 번역 엔진"
+  },
+  "options_lara_key_id": {
+    "message": "Lara Access Key ID"
+  },
+  "options_lara_key_secret": {
+    "message": "Lara Access Key Secret"
+  },
+  "options_lara_model": {
+    "message": "문자 제거 모델(전체 이미지 엔진 전용)"
+  },
+  "options_lara_model_overlay": {
+    "message": "오버레이: 원본 위에 그리며 원문 유지"
+  },
+  "options_lara_model_inpainting": {
+    "message": "Inpainting: 문자를 제거하고 배경 복구(권장)"
+  },
+  "options_lara_model_generative_fast": {
+    "message": "Generative fast: 페이지를 빠르게 다시 그림"
+  },
+  "options_lara_model_generative": {
+    "message": "Generative: 가장 높은 품질로 다시 그림"
+  }
+}

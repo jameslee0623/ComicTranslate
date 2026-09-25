@@ -27,6 +27,15 @@ let settings = null;
 let engines = [];
 let activeTab = null;
 let currentHost = null;
+let uiLanguage = 'en';
+
+function t(key) {
+  return CTI18n.t(key);
+}
+
+function msg(key, values) {
+  return CTI18n.interpolate(t(key), values);
+}
 
 async function bg(type, payload) {
   const reply = await browser.runtime.sendMessage(Object.assign({ type }, payload));
@@ -92,10 +101,13 @@ function setStatus(text) {
  * quota ran out, or the OCR simply found no text.
  */
 function pageSummary(status) {
-  return `On this page: ${status.translated} translated, ` +
-         `${status.stats.failed} failed, ${status.stats.skipped} skipped.` +
-         (status.quotaStopped ? ' Stopped: Lara quota exhausted.' : '') +
-         (status.lastError ? ' Last error: ' + status.lastError : '');
+  return msg('popup_summary', {
+    translated: status.translated,
+    failed: status.stats.failed,
+    skipped: status.stats.skipped,
+    quota: status.quotaStopped ? t('popup_summary_quota_stopped') : '',
+    error: status.lastError ? t('popup_summary_last_error') + status.lastError : ''
+  });
 }
 
 function fillLanguages(selected) {
@@ -114,7 +126,8 @@ function fillEngines(selected) {
   for (const engine of engines) {
     const opt = document.createElement('option');
     opt.value = engine.id;
-    opt.textContent = engine.label;
+    const key = 'engine_' + engine.id.replace(/-/g, '_');
+    opt.textContent = t(key) === key ? engine.label : t(key);
     if (engine.id === selected) opt.selected = true;
     els.engineId.appendChild(opt);
   }
@@ -123,20 +136,15 @@ function fillEngines(selected) {
   // knowable up front, and it is exactly what silently empties a monthly quota:
   // 40 pages is ~400,000 characters, which is most of a Pro month.
   const NOTES = {
-    lara: 'Official API. Each image bills a flat 10,000 characters, so 40 pages ' +
-          'is ~400,000 - most of a Pro month. Needs credentials in Settings.',
-    'lens-lara': 'Official API, text only, billed per character sent (a page is ' +
-                 'usually 500-1,500). Needs credentials in Settings.',
-    lens: 'No API key required. Undocumented Google endpoint that can change ' +
-          'without notice.',
-    'lens-local': 'Lens finds the text for free; only those strings go to your ' +
-          'own local server, which returns the translation. No quota. Enter its ' +
-          'URL in Settings.'
+    lara: 'engine_note_lara',
+    'lens-lara': 'engine_note_lens_lara',
+    lens: 'engine_note_lens',
+    'lens-local': 'engine_note_lens_local'
   };
   els.engineNote.textContent = current
-    ? (NOTES[current.id] || (current.needsKey
-        ? 'Requires an API key (see Settings).'
-        : 'No API key required.'))
+    ? t(NOTES[current.id] || (current.needsKey
+        ? 'engine_note_needs_key'
+        : 'engine_note_none_needed'))
     : '';
 }
 
@@ -158,8 +166,18 @@ async function refreshPageState() {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   activeTab = tabs[0] || null;
 
+  const data = await bg('CT_GET_SETTINGS');
+  settings = data.settings;
+  engines = data.engines;
+  try {
+    uiLanguage = await CTI18n.init(settings.uiLanguage || 'auto');
+  } catch (e) {
+    uiLanguage = 'en';
+  }
+  CTI18n.apply(document);
+
   if (!activeTab || !activeTab.url) {
-    els.pageState.textContent = 'No page available.';
+    els.pageState.textContent = t('popup_no_page');
     els.siteToggle.hidden = true;
     els.sitesSection.hidden = true;
     els.pageState.className = 'muted';
@@ -168,10 +186,6 @@ async function refreshPageState() {
 
   currentHost = null;
   try { currentHost = new URL(activeTab.url).hostname; } catch { /* privileged page */ }
-
-  const data = await bg('CT_GET_SETTINGS');
-  settings = data.settings;
-  engines = data.engines;
 
   fillLanguages(settings.targetLang);
   fillEngines(settings.engineId);
@@ -189,17 +203,13 @@ async function refreshPageState() {
   els.siteToggle.hidden = !currentHost || mode === 'all';
   if (currentHost) {
     if (mode === 'blocklist') {
-      els.siteLabel.textContent = listed
-        ? currentHost + ' is on the block list (never translated).'
-        : currentHost + ' is translated (not on the block list).';
-      els.siteToggle.textContent = listed ? 'Remove from block list' : 'Block this site';
+      els.siteLabel.textContent = msg(listed ? 'popup_site_blocked' : 'popup_site_translated', { host: currentHost });
+      els.siteToggle.textContent = listed ? t('popup_remove_from_blocklist') : t('popup_block_site');
     } else {
-      els.siteLabel.textContent = listed
-        ? currentHost + ' is on the list (translated).'
-        : currentHost + ' is NOT on the list, so it is not translated.';
+      els.siteLabel.textContent = msg(listed ? 'popup_site_in_list' : 'popup_site_not_in_list', { host: currentHost });
       els.siteToggle.textContent = listed
-        ? 'Remove ' + currentHost + ' from the translating list'
-        : 'Add this site to the translating list';
+        ? msg('popup_remove_site_named', { host: currentHost })
+        : t('popup_add_site');
     }
   }
 
@@ -210,9 +220,12 @@ async function refreshPageState() {
       const u = await bg('CT_GET_USAGE');
       const cap = settings.laraMonthlyCap || 10000;
       usageEl.hidden = false;
-      usageEl.textContent = 'Lara this month: ' + u.totalChars.toLocaleString() +
-        ' / ' + cap.toLocaleString() + ' chars (' + u.textChars.toLocaleString() +
-        ' text + ' + u.imageCount + ' image ×10k).';
+      usageEl.textContent = msg('popup_usage', {
+      total: u.totalChars.toLocaleString(),
+      cap: cap.toLocaleString(),
+      text: u.textChars.toLocaleString(),
+      images: u.imageCount
+    });
     } catch {
       usageEl.hidden = true;
     }
@@ -223,15 +236,15 @@ async function refreshPageState() {
   const check = await bg('CT_CHECK_PAGE', { url: activeTab.url });
   const isHttp = /^https?:/i.test(activeTab.url);
   if (!isHttp) {
-    els.pageState.textContent = 'Not a web page — nothing to translate here.';
+    els.pageState.textContent = t('popup_page_restricted');
     els.pageState.className = 'muted warn';
   } else if (check.allowed) {
-    els.pageState.textContent = 'Active on ' + currentHost;
+    els.pageState.textContent = msg('popup_active_on', { host: currentHost });
     els.pageState.className = 'muted';
   } else {
     els.pageState.textContent = settings.enabled
-      ? 'Excluded on ' + currentHost + ' (see Settings).'
-      : 'Paused — turn on Enabled to start.';
+      ? msg('popup_excluded_on', { host: currentHost })
+      : t('popup_page_paused');
     els.pageState.className = 'muted';
   }
 
@@ -241,7 +254,7 @@ async function refreshPageState() {
       setStatus(pageSummary(status));
     }
   } catch {
-    setStatus('Reload the page to activate on it.');
+    setStatus(t('popup_reload_page'));
   }
 }
 
@@ -249,7 +262,7 @@ els.enabled.addEventListener('change', async () => {
   await save({ enabled: els.enabled.checked });
   const result = await pushToTab();
   if (result && result.error) setStatus(result.error);
-  else setStatus(els.enabled.checked ? 'Translating this page…' : 'Restored and paused.');
+  else setStatus(els.enabled.checked ? t('popup_page_translating') : t('popup_page_restored'));
 });
 
 els.targetLang.addEventListener('change', async () => {
@@ -273,11 +286,11 @@ els.siteToggle.addEventListener('click', async () => {
   // restores any translated images and stops.
   const result = await pushToTab();
   if (result && result.error) setStatus(result.error);
-  else setStatus('Site list updated.');
+  else setStatus(t('popup_site_list_updated'));
 });
 
 els.scanNow.addEventListener('click', async () => {
-  setStatus('Scanning…');
+  setStatus(t('popup_translating_now'));
   try {
     await toTab('CT_SCAN_NOW');
     const status = await toTab('CT_GET_STATUS');
@@ -290,7 +303,7 @@ els.scanNow.addEventListener('click', async () => {
 els.restore.addEventListener('click', async () => {
   try {
     const result = await toTab('CT_RESTORE');
-    setStatus('Restored ' + (result ? result.restored : 0) + ' image(s).');
+    setStatus(msg('popup_restored', { count: result ? result.restored : 0 }));
   } catch (e) {
     setStatus(e.message);
   }
@@ -300,10 +313,10 @@ els.openOptions.addEventListener('click', () => browser.runtime.openOptionsPage(
 
 els.clearCache.addEventListener('click', async () => {
   await bg('CT_CACHE_CLEAR');
-  setStatus('Cache cleared.');
+  setStatus(t('popup_cache_cleared'));
 });
 
 refreshPageState().catch((e) => {
-  els.pageState.textContent = 'Error: ' + e.message;
+  els.pageState.textContent = msg('popup_error', { error: e.message });
   els.pageState.className = 'muted warn';
 });

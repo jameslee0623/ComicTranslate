@@ -5,26 +5,26 @@
   <title>ComicTranslate</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body data-i18n-ready="false">
   <header>
     <h1>ComicTranslate</h1>
-    <label class="switch" title="Translate this site">
+    <label class="switch" title="Translate this site" data-i18n-title="popup_translate_this_site">
       <input type="checkbox" id="enabled">
-      <span>Enabled</span>
+      <span data-i18n="popup_enabled">Enabled</span>
     </label>
   </header>
 
-  <p id="page-state" class="muted">Checking page…</p>
+  <p id="page-state" class="muted" data-i18n="popup_checking_page">Checking page…</p>
 
-  <button id="site-toggle" hidden>Add this site to the translating list</button>
+  <button id="site-toggle" hidden data-i18n="popup_add_site">Add this site to the translating list</button>
 
   <section>
-    <label for="targetLang">Translate into</label>
+    <label for="targetLang" data-i18n="popup_translate_into">Translate into</label>
     <select id="targetLang"></select>
   </section>
 
   <section>
-    <label for="engineId">Engine</label>
+    <label for="engineId" data-i18n="popup_engine">Engine</label>
     <select id="engineId"></select>
     <p id="engine-note" class="muted small"></p>
   </section>
@@ -32,25 +32,26 @@
   <p id="lara-usage" class="muted small" hidden></p>
 
   <section id="sites-section" hidden>
-    <label>Sites</label>
+    <label data-i18n="popup_sites">Sites</label>
     <p id="site-label" class="muted small"></p>
   </section>
 
   <div class="row">
-    <button id="scan-now">Translate now</button>
-    <button id="restore" class="secondary">Restore page</button>
+    <button id="scan-now" data-i18n="popup_translate_now">Translate now</button>
+    <button id="restore" class="secondary" data-i18n="popup_restore_page">Restore page</button>
   </div>
 
-  <p id="status" class="muted small">Ready.</p>
+  <p id="status" class="muted small" data-i18n="popup_ready">Ready.</p>
 
   <footer>
-    <button id="open-options" class="link">Settings</button>
-    <button id="clear-cache" class="link">Clear cache</button>
+    <button id="open-options" class="link" data-i18n="popup_settings">Settings</button>
+    <button id="clear-cache" class="link" data-i18n="popup_clear_cache">Clear cache</button>
   </footer>
 
   <script src="../shared/compat.js"></script>
   <script src="../shared/codec.js"></script>
   <script src="../shared/languages.js"></script>
+  <script src="../shared/i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

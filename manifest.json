@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "ComicTranslate",
-  "version": "0.2.0",
-  "description": "Translate the text inside images and comics in place, replacing the picture with a translated version.",
+  "default_locale": "en",
+  "name": "__MSG_extensionName__",
+  "version": "1.1",
+  "description": "__MSG_extensionDescription__",
 
   "icons": {
     "32": "assets/icons/icon-32.png",
