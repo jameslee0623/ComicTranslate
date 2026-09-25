@@ -18,6 +18,10 @@
 var noop = function () {};
 
 globalThis.window = globalThis;
+// window IS globalThis here, so the listeners a module registers on the window
+// (pagehide, for instance) have to exist on the global object.
+globalThis.addEventListener = noop;
+globalThis.removeEventListener = noop;
 globalThis.location = { href: 'https://example.test/page' };
 globalThis.navigator = { userAgent: 'jsc-smoke-test' };
 // Real browsers always define console; the smoke harness must too, or any
@@ -79,7 +83,8 @@ globalThis.browser = {
     query: function () { return Promise.resolve([]); },
     sendMessage: function () { return Promise.resolve({}); },
     remove: function () { return Promise.resolve(); },
-    onUpdated: { addListener: noop, removeListener: noop }
+    onUpdated: { addListener: noop, removeListener: noop },
+    onRemoved: { addListener: noop, removeListener: noop }
   }
 };
 
@@ -138,7 +143,9 @@ var EXPECTED = {
   CTLensLaraEngine: ['imageToRegions', 'log'],
   CTLensLocalEngine: ['requireEndpoint', 'parseReply', 'variantKey',
                       'languageLabel', 'buildInstruction', 'extractJsonArray',
-                      'normalizeTranslations', 'imageToRegions', 'log'],
+                      'normalizeTranslations', 'imageToRegions', 'log',
+                      'reasoningText', 'cancelActive', 'unwrapAssistantText',
+                      'parseBody'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'isQuotaError',
                  'imageToRegions'],

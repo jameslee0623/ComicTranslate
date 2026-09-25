@@ -10,9 +10,10 @@
 #   2. every module loads and exports   (stubbed browser globals)
 #   3. the pure content logic passes    (via jsc)
 #   4. the Lara engine logic passes     (via jsc)
-#   5. cross-file references resolve    (manifest paths, element ids, exports)
-#   6. Firefox AND Chrome compatibility (namespace shim, byte transport)
-#   7. privacy: local-only test values never appear on any pushed ref
+#   5. background routing passes        (cancellation, queue draining)
+#   6. cross-file references resolve    (manifest paths, element ids, exports)
+#   7. Firefox AND Chrome compatibility (namespace shim, byte transport)
+#   8. privacy: local-only test values never appear on any pushed ref
 #
 # It does NOT prove the extension works in a browser. Load it with
 # about:debugging (Firefox) or chrome://extensions (Chrome) and translate a real
@@ -33,7 +34,7 @@ if [ ! -x "$JSC" ]; then
   exit 2
 fi
 
-echo "== 1/7 syntax: parsing every JS file =="
+echo "== 1/8 syntax: parsing every JS file =="
 python3 - "$FILE_LIST" <<'PY'
 import json, os, sys
 out = sys.argv[1]
@@ -45,6 +46,7 @@ files += [os.path.abspath('tools/check_syntax.js'),
           os.path.abspath('tools/test_load.js'),
           os.path.abspath('tools/test_pure.js'),
           os.path.abspath('tools/test_lara.js'),
+          os.path.abspath('tools/test_background.js'),
           os.path.abspath('tools/test_codec.js'),
           os.path.abspath('tools/test_compat.js')]
 json.dump(files, open(out, 'w'))
@@ -55,26 +57,32 @@ if ! "$JSC" tools/check_syntax.js; then
 fi
 
 echo
-echo "== 2/7 load: every module must actually evaluate =="
+echo "== 2/8 load: every module must actually evaluate =="
 echo "   (catches runtime errors at load time that a parser cannot see)"
 if ! "$JSC" tools/test_load.js; then
   failures=$((failures + 1))
 fi
 
 echo
-echo "== 3/7 functional: pure content logic =="
+echo "== 3/8 functional: pure content logic =="
 if ! "$JSC" tools/test_pure.js; then
   failures=$((failures + 1))
 fi
 
 echo
-echo "== 4/7 lara: engine auth + request unit tests =="
+echo "== 4/8 lara: engine auth + request unit tests =="
 if ! "$JSC" tools/test_lara.js; then
   failures=$((failures + 1))
 fi
 
 echo
-echo "== 5/7 semantic: cross-file consistency =="
+echo "== 5/8 background: page-change cancellation and queue draining =="
+if ! "$JSC" tools/test_background.js; then
+  failures=$((failures + 1))
+fi
+
+echo
+echo "== 6/8 semantic: cross-file consistency =="
 if ! python3 tools/check_semantics.py; then
   failures=$((failures + 1))
 fi
@@ -87,7 +95,7 @@ else
 fi
 
 echo
-echo "== 6/7 browser: Firefox + Chrome compatibility =="
+echo "== 7/8 browser: Firefox + Chrome compatibility =="
 echo "   (namespace shim, and bytes surviving Chrome's JSON message serialisation)"
 if ! "$JSC" tools/test_compat.js; then
   failures=$((failures + 1))
@@ -97,7 +105,7 @@ if ! "$JSC" tools/test_codec.js; then
 fi
 
 echo
-echo "== 7/7 privacy: local-only test values must never reach origin =="
+echo "== 8/8 privacy: local-only test values must never reach origin =="
 # Local-only test values (a test language, a test site) exist only as unpushed
 # local commits. The values themselves are named in tools/local_only.txt,
 # which is gitignored - so this repo's pushed history carries no trace of

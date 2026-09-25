@@ -96,12 +96,13 @@ what it says, then it posts those strings to your URL. The image itself never
 leaves the browser, so a local model only ever sees text:
 
 ```http
-POST /translate            # a bare host:port gets this path appended
+POST /translate            # a dedicated shim's own path, kept as given
+                           # (a bare host:port gets /v1/chat/completions instead)
 Content-Type: application/json
 Authorization: Bearer …    # only when you set a key
 
 {
-  "instruction": "Translate the following 2 text(s) from Japanese to English. Reply with ONLY a JSON array of 2 translated strings, in the same order, no explanations, no code fences.",
+  "instruction": "Translate the following 2 text(s) from Japanese to English. Reply with ONLY a JSON array of 2 translated strings, in the same order, no explanations, no code fences. Do not analyse the text and do not think step by step: output the array itself as your very first characters, then stop.",
   "texts": ["こんにちは", "さようなら"],
   "source": "ja",
   "target": "en"
@@ -344,34 +345,108 @@ The **instruction is the first line of the message**, outside any JSON, followed
 by the source strings as a JSON array on the second line:
 
 ```
-Translate the following 3 text(s) from Japanese to English. Reply with ONLY a JSON array of 3 translated strings, in the same order, no explanations, no code fences.
+Translate the following 3 text(s) from Japanese to English. Reply with ONLY a JSON array of 3 translated strings, in the same order, no explanations, no code fences. Do not analyse the text and do not think step by step: output the array itself as your very first characters, then stop.
 ["こんにちは","またね","どこへ行くの？"]
 ```
 
 A general LLM asked to "translate" will otherwise narrate, ask which language,
 or return an object; naming the job, both languages, the count and the exact
 output shape in one line is what makes the answer usable. `texts`, `source` and
-`target` also ride along in the JSON body for dedicated translation shims.
+`target` also ride along in the JSON body for dedicated translation shims. The
+closing "do not think" sentence is a mitigation rather than a guarantee — a
+reasoning model follows its own template first — but it is what cuts a 1,500-token
+analysis down to a direct answer on the models that do read it.
 
 Replies are parsed leniently on the way in and strictly on the way out. Accepted:
 `{"translations":[…]}`, a bare array, an OpenAI `chat.completion` envelope
 (`choices[0].message.content`), or an array embedded in prose or a code fence —
 each recovered by a brace-balance scan, not a regex, so brackets inside
-translated strings survive. Two guards matter:
+translated strings survive. Three guards matter:
 
 - **The assistant's `content` is read, never the whole body.** Reasoning models
   (Gemma, DeepSeek-R1 and friends) emit a `reasoning_content` field that quotes
   the *source* text back while they think. Scanning the body for the first array
   would find that half and paint the untranslated original into every speech
   bubble with no error anywhere.
+- **The scan prefers an array with exactly the number of entries it asked for,
+  and takes the last of those.** That is what makes it safe to read inside a
+  `<think>` block (which LM Studio keeps in `content` when its reasoning splitter
+  is off), where the model quotes the source *and* restates its own draft: the
+  count identifies the answer, "last wins" picks the final version over the draft.
 - **A length mismatch throws instead of pairing by position**, because a silent
   mis-pairing puts plausible-looking nonsense in the wrong bubble — worse than a
   visible failure.
+
+**Reasoning models can answer with an empty `content`.** With LM Studio's
+*"Separate reasoning_content and content in API responses"* setting on, a reply
+whose whole output falls inside the thinking half comes back as HTTP 200 with
+`finish_reason: "stop"`, `content: ""`, and every translated line stranded in
+`reasoning_content` — LM Studio reports that as success
+([bug #1602](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/1602)),
+and `enable_thinking: false` and `/no_think` do **not** prevent it. Two things
+happen here:
+
+- **The work is recovered when it is recognisable.** If the thinking half contains
+  an array with exactly the expected number of strings, it is used — the model did
+  the work, so discarding it would waste the user's own GPU time. An exact count is
+  required; without one, a quoted array of source text could be mistaken for the
+  answer, which is exactly the failure the `content`-only rule exists to prevent.
+- **When it is not, the error says so.** The message names the setting and points
+  at Developer Settings instead of reporting a JSON parse failure, so the user is
+  not sent hunting for a bug on our side. Nothing is painted and nothing is cached.
+
+Turning off that LM Studio setting is still the better fix: the answer then arrives
+in `content` where it belongs. A non-reasoning model sidesteps it entirely.
 
 Servers that answer a bad route with **HTTP 200 and an error body** (LM Studio
 does: `{"error":"Unexpected endpoint or method."}`) have that message surfaced,
 rather than being reported as "no translations array" and sending the user
 hunting for a server that is answering perfectly well.
+
+**Changing the page cancels the request.** A local model is the only engine here
+that spends the user's own CPU and GPU on every token, and a manga page is read for
+seconds at a time — so a generation still running when the reader turns the page is
+worthless: it belongs to a document that no longer exists, and on a reasoning model
+it can be another thousand tokens of work nobody will ever see. Both halves of the
+queue are stopped:
+
+- **The request in flight is aborted.** There is no cancel route in the
+  OpenAI-compatible API (LM Studio, Ollama, llama.cpp's server and vLLM all answer a
+  chat request with one ordinary response), so the mechanism all of them honour is
+  closing the request. `AbortController.abort()` drops the connection, and the
+  server stops generating.
+- **Everything still queued is dropped.** The content script posts one request per
+  image, so a 40-panel page leaves a chain of them. Each records the identity of
+  the document that posted it — the tab *and* the frame, since the script runs in
+  every frame — and a job that reaches the front of the queue after that identity
+  moved returns `skipped` without a single byte going to the server. No more OCR
+  uploads and no more generations for a page that is gone.
+
+The signal is `tabs.onUpdated` with `status: "loading"`, which fires once per real
+navigation and never for a same-document move (a hash change, `history.pushState`),
+where the content script is still there and still waiting. Frame identity keeps the
+cancellation honest on ad-heavy readers: an iframe that reloads drops only its own
+work, because the frame reports itself leaving (`CT_CANCEL_TRANSLATE` on
+`pagehide`), while a tab-wide document load invalidates every frame at once. That
+message is also the earliest signal available — it reaches the background before the
+next page even starts loading — and the listener covers the case where it loses the
+race with teardown.
+
+A deliberate stop is not reported as a failure: the engine raises a `cancelled`
+error, background.js turns it into `skipped`, and no red "Failed" chip is drawn for
+work the user themselves interrupted. Images left untranslated by it are deliberately
+**not** marked as seen, so returning to the page (bfcache, "previous page") still
+translates them.
+
+**One measured caveat.** An unconstrained reasoning model is slow enough to hit the
+engine's 120 s ceiling: `google/gemma-4-12b` in LM Studio took longer than two
+minutes on a 15-line page and never returned, and a 3-line page spent its whole
+answer inside the thinking half. Neither is a parser problem — the prompt asks for
+the array first and the parser recovers or explains — but a page translation that
+takes minutes is not usable, so with a reasoning model expect to raise LM Studio's
+`max tokens` / turn the reasoning split off, or pick a smaller instruct model. The
+timeout is deliberately left in place rather than raised: an aborted request fails
+loudly with the URL, where an unbounded wait looks like a hung extension.
 
 **Test local server** validates the URL and lists the models the server offers
 (`/v1/models`, or `/api/tags` for Ollama) so the model id does not have to be

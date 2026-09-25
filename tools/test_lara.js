@@ -119,8 +119,8 @@ globalThis.browser = {
 };
 // Stubs for what jsc lacks. laraEngine.js builds its multipart body by hand, so
 // FormData/Blob only have to exist; lensLocalEngine.js aborts a hung local
-// request after 120s, and jsc has setTimeout but neither AbortController nor
-// clearTimeout.
+// request after 120s and aborts it on demand when the page changes, and jsc has
+// setTimeout but neither AbortController nor clearTimeout.
 globalThis.FormData = function () {
   this.fields = {};
   this.append = function (k, v, f) { this.fields[k] = { value: v, file: f }; };
@@ -128,9 +128,23 @@ globalThis.FormData = function () {
 globalThis.Blob = function (parts, opts) {
   this.parts = parts; this.type = (opts && opts.type) || '';
 };
+// Fires onabort/abort listeners like the real thing, because that notification is
+// the entire mechanism a cancelled fetch is rejected by - a stub that only flips
+// `aborted` would let a broken cancel pass every test.
 globalThis.AbortController = function () {
-  this.signal = { aborted: false };
-  this.abort = function () { this.signal.aborted = true; };
+  var self = this;
+  this.signal = {
+    aborted: false,
+    onabort: null,
+    addEventListener: function (name, fn) {
+      if (name === 'abort') self.signal.onabort = fn;
+    }
+  };
+  this.abort = function () {
+    if (self.signal.aborted) return;
+    self.signal.aborted = true;
+    if (typeof self.signal.onabort === 'function') self.signal.onabort();
+  };
 };
 globalThis.clearTimeout = function () {};
 
@@ -545,6 +559,65 @@ async function main() {
   check('lens-local: a length mismatch throws instead of zipping',
         !!mismatch && /7/.test(mismatch.message));
 
+  // ── picking the answer out of a reply that also quotes its work ──────────
+  // An array with the RIGHT number of entries beats a longer one. This is what
+  // lets the parser read a reply whose thinking half is still attached - LM Studio
+  // keeps <think> inside content when its reasoning splitter is off - because
+  // while thinking the model quotes the source array back and restates its own
+  // draft. Longest-wins would pick the scratch work; count-wins picks the answer.
+  var counted = CTLensLocalEngine.extractJsonArray(
+    'Draft: ["あ","い","う","え","お"]\nFinal: ["Hello", "World"]', 2);
+  check('lens-local: the array with the requested count beats a longer one',
+        counted.parsed.length === 2 && counted.parsed[0] === 'Hello');
+  var restated = CTLensLocalEngine.extractJsonArray(
+    'Try: ["one","two"]\nBetter: ["three","four"]', 2);
+  check('lens-local: of two arrays of the right size, the last one wins',
+        restated.parsed[0] === 'three');
+  eq('lens-local: without a count the longest window still wins',
+     CTLensLocalEngine.extractJsonArray('["a","b","c"]').parsed.length, 3);
+
+  // The captured live failure, reproduced: HTTP 200, finish_reason "stop", an
+  // EMPTY message.content, and every translated line left in reasoning_content
+  // (LM Studio bug #1602, google/gemma-4-12b). The model did the work, so an
+  // exact-count array in the thinking half is accepted - and only an exact-count
+  // array, which is what keeps the quoted source from being painted in.
+  var thinkOnly = JSON.stringify({
+    id: 'chatcmpl-qtzc3ea', object: 'chat.completion', model: 'google/gemma-4-12b',
+    choices: [{ index: 0, message: {
+      role: 'assistant',
+      content: '',
+      reasoning_content: 'Plan: 2 lines. Draft: ["あいさつ", "またね"] ' +
+        'Refined final answer: ["Hello", "See you later"]'
+    }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 136, completion_tokens: 1530 }
+  });
+  var recovered = CTLensLocalEngine.parseBody(thinkOnly, 2);
+  check('lens-local: a reasoning-only reply is recovered, not thrown away',
+        recovered[0] === 'Hello' && recovered[1] === 'See you later');
+  check('lens-local: recovery takes the final draft, never the quoted source',
+        recovered.indexOf('あいさつ') < 0 && recovered.indexOf('またね') < 0);
+  check('lens-local: the thinking half is found in every envelope spelling',
+        CTLensLocalEngine.reasoningText({ message: { content: '', thinking: 'x' } }) === 'x' &&
+        CTLensLocalEngine.reasoningText(
+          { output: [{ type: 'reasoning', content: 'y' }] }) === 'y' &&
+        CTLensLocalEngine.reasoningText({ choices: [{ message: { content: 'ok' } }] }) === null);
+
+  // Reasoning with no array in it at all - the shape the captured reply actually
+  // had, a numbered list of translations. There is nothing to recover, so the
+  // error has to name the real cause instead of reporting a JSON parse failure on
+  // our side and sending the user hunting for a bug that does not exist.
+  var thinkProse = JSON.stringify({
+    choices: [{ index: 0, message: { role: 'assistant', content: '',
+      reasoning_content: '1. 恥ずかしい -> 好害羞\n2. ば -> 啊' },
+      finish_reason: 'stop' }]
+  });
+  var threwThink = null;
+  try { CTLensLocalEngine.parseBody(thinkProse, 2); } catch (e) { threwThink = e; }
+  check('lens-local: unrecoverable reasoning names the real cause, not a parse bug',
+        !!threwThink && !/not valid JSON/i.test(threwThink.message) &&
+        /nothing was translated/i.test(threwThink.message) &&
+        /reasoning_content/i.test(threwThink.message));
+
   eq('lens-local: free engine bills nothing', CTLensLocalEngine.free, true);
   eq('lens-local: needs no key', CTLensLocalEngine.needsKey, false);
   // Regions come back already translated, so engines.js must not run the shared
@@ -651,6 +724,10 @@ async function main() {
   eq('lens-local: diagnostics name the server', out.diagnostics.endpoint,
      'http://localhost:8000/v1/chat/completions');
   check('lens-local: Lens diagnostics survive', out.diagnostics.lensCalls === 2);
+  // A model that answers the first time costs exactly one request: dividing a
+  // batch is a recovery path, never the normal path.
+  eq('lens-local: a clean page costs one request', out.diagnostics.batches, 1);
+  eq('lens-local: and reports nothing unpaired', out.diagnostics.untranslated, 0);
 
   // An unknown source language must be omitted, not sent as the literal "auto":
   // no model wants to be told the input is in a language called auto.
@@ -674,8 +751,10 @@ async function main() {
   check('lens-local: a bare JSON array reply is accepted',
         out.regions[0].translated === 'Hi');
 
-  // A server that answers with the wrong number of lines must fail loudly:
-  // pairing them up anyway would paint the wrong words into speech bubbles.
+  // A model that answers with the wrong number of lines must still fail loudly:
+  // pairing them up anyway would paint the wrong words into speech bubbles. What
+  // changed is how hard we try first - the batch is re-asked in halves, so the
+  // error has to survive that and not be papered over by a lucky small batch.
   // The scan stub above reports a single box, so widen it first - one line in,
   // one line out is a match, and a match is not what is under test here.
   globalThis.CTLensProto.scan = function () {
@@ -683,7 +762,14 @@ async function main() {
       sourceLang: 'ja', regions: [{ text: 'x' }, { text: 'y' }], diagnostics: {}
     });
   };
-  fetchQueue.push(function () { return jsonReply(200, { translations: ['only'] }); });
+  // Short by one at EVERY size, so this is the model that cannot pair a line even
+  // alone: 2 lines -> 1, then each single line -> none at all.
+  var unpairable = function (url, opts) {
+    var sent = JSON.parse(opts.body).texts;
+    return jsonReply(200, { translations: sent.slice(0, sent.length - 1) });
+  };
+  fetchQueue.push(unpairable, unpairable, unpairable);
+  var callsBeforeUnpaired = fetchCalls.length;
   var threwPair = null;
   try {
     await CTLensLocalEngine.imageToRegions({
@@ -693,6 +779,8 @@ async function main() {
   } catch (e) { threwPair = e; }
   check('lens-local: an unpaired reply fails loudly',
         !!threwPair && /refusing to pair/.test(threwPair.message));
+  eq('lens-local: but only after re-asking in halves',
+     fetchCalls.length - callsBeforeUnpaired, 3);
 
   // ...and an unreachable server reports the URL the user typed, because that
   // is the one thing they can act on. The bare host is reported fully resolved,
@@ -707,6 +795,76 @@ async function main() {
   } catch (e) { threwDown = e; }
   check('lens-local: an unreachable server names the URL',
         !!threwDown && /http:\/\/l:1\/v1\/chat\/completions/.test(threwDown.message));
+
+  // ── batch halving: count mismatches re-asked in smaller pieces ───────
+  // A model that drops the last line on batches larger than 2, but behaves on
+  // 2 or fewer (the real LM Studio behavior on 17 strings dropping 2).
+  var dropsOver2 = function (url, opts) {
+    var sent = JSON.parse(opts.body).messages[0].content;
+    var match = sent.match(/\[.*\]/);
+    var texts = match ? JSON.parse(match[0]) : [];
+    var out = texts.map(function (t) { return 'T(' + t + ')'; });
+    if (texts.length > 2) out = out.slice(0, texts.length - 1);
+    return jsonReply(200, { translations: out });
+  };
+
+  globalThis.CTLensProto.scan = function () {
+    return Promise.resolve({
+      sourceLang: 'ja',
+      regions: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }],
+      diagnostics: {}
+    });
+  };
+  fetchQueue.push(dropsOver2, dropsOver2, dropsOver2);
+  var callsBeforeSplit = fetchCalls.length;
+  var splitOut = await CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+    sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+  });
+  eq('lens-local: split batch takes 3 requests (top + 2 halves)',
+     fetchCalls.length - callsBeforeSplit, 3);
+  eq('lens-local: all 4 lines translated after splitting',
+     splitOut.regions.map(function (r) { return r.translated; }).join(','),
+     'T(A),T(B),T(C),T(D)');
+  eq('lens-local: exact order and text alignment preserved',
+     splitOut.regions[2].translated, 'T(C)');
+  eq('lens-local: diagnostics track split batches', splitOut.diagnostics.batches, 3);
+  eq('lens-local: diagnostics report 0 untranslated', splitOut.diagnostics.untranslated, 0);
+
+  // Line that fails down to leaf level leaves region untranslated ('' fallback)
+  var failsSingleB = function (url, opts) {
+    var sent = JSON.parse(opts.body).messages[0].content;
+    var match = sent.match(/\[.*\]/);
+    var texts = match ? JSON.parse(match[0]) : [];
+    if (texts.length > 1) {
+      // Drop last line for batch > 1
+      return jsonReply(200, { translations: texts.slice(0, texts.length - 1) });
+    }
+    // At leaf: 'A' succeeds, 'B' returns empty array (unpairable)
+    if (texts[0] === 'B') {
+      return jsonReply(200, { translations: [] });
+    }
+    return jsonReply(200, { translations: ['T(' + texts[0] + ')'] });
+  };
+  globalThis.CTLensProto.scan = function () {
+    return Promise.resolve({
+      sourceLang: 'ja',
+      regions: [{ text: 'A' }, { text: 'B' }],
+      diagnostics: {}
+    });
+  };
+  fetchQueue.push(failsSingleB, failsSingleB, failsSingleB);
+  var leafOut = await CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 10, height: 10,
+    sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+  });
+  eq('lens-local: unresolvable line leaves translated string empty',
+     leafOut.regions[1].translated, '');
+  eq('lens-local: resolved line gets translated string',
+     leafOut.regions[0].translated, 'T(A)');
+  eq('lens-local: painter original text retained', leafOut.regions[1].text, 'B');
+  eq('lens-local: diagnostics report 1 untranslated line', leafOut.diagnostics.untranslated, 1);
+
 
   // ── a general LLM talks back: instruction + tolerant parsing ─────────
   eq('lens-local: languageLabel resolves a shared-table code',
@@ -757,14 +915,15 @@ async function main() {
         out.regions[0].translated === 'one' && out.regions[1].translated === 'two');
 
   // ...but genuine chat prose still fails loudly instead of being guessed at.
-  fetchQueue.push(function () {
+  var proseResponder = function () {
     return {
       ok: true, status: 200,
       headers: { get: function () { return 'text/plain'; } },
       json: function () { return Promise.reject(new Error('not json')); },
       text: function () { return Promise.resolve('I cannot translate that, sorry.'); }
     };
-  });
+  };
+  fetchQueue.push(proseResponder, proseResponder, proseResponder);
   var threwChat = null;
   try {
     await CTLensLocalEngine.imageToRegions({
@@ -808,6 +967,56 @@ async function main() {
         !!(outConsumed && outConsumed.regions) &&
         outConsumed.regions[0].translated === 'one' &&
         outConsumed.regions[1].translated === 'two');
+
+  // ── cancelling: turning the page stops the model, it does not wait ───────
+  // A local model burns the user's own CPU for every token it emits, and the page
+  // that asked for this translation can be gone long before the model finishes.
+  // So the request stays registered while it is in flight, cancelActive() cuts it,
+  // and the failure is flagged `cancelled` - which is what lets background.js treat
+  // a deliberate stop as an expected event instead of a server error.
+  var inFlight = null;
+  fetchQueue.push(function (url, opts) {
+    return new Promise(function (resolve, reject) {
+      inFlight = { url: url, opts: opts, settle: resolve };
+      // Modelled exactly: an aborted fetch rejects with a DOMException named
+      // AbortError, which is indistinguishable from the 120s timeout by type -
+      // only the engine's own `cancelled`/`timedOut` flags tell them apart.
+      opts.signal.onabort = function () {
+        var e = new Error('The operation was aborted.');
+        e.name = 'AbortError';
+        reject(e);
+      };
+    });
+  });
+
+  var pending = CTLensLocalEngine.imageToRegions({
+    bytes: new Uint8Array([9]), mime: 'image/png', width: 100, height: 50,
+    sourceLang: 'ja', targetLang: 'en', settings: { localTextUrl: 'http://l:1' }
+  });
+  // Bounded microtask drain - no timers, so this cannot hang: the Lens stubs all
+  // resolve immediately, so the fetch is issued after a fixed handful of ticks.
+  for (var spin = 0; spin < 50 && !inFlight; spin++) await Promise.resolve();
+  check('lens-local: the request is issued and waiting', !!inFlight);
+  eq('lens-local: a live request can be cancelled',
+     CTLensLocalEngine.cancelActive(), true);
+
+  var stopped = null;
+  try { await pending; } catch (e) { stopped = e; }
+  check('lens-local: a cancelled request ends as cancelled, not as a translation',
+        !!stopped && stopped.cancelled === true);
+  check('lens-local: the cancel says the page changed, not that the server failed',
+        !!stopped && /page changed/i.test(stopped.message) &&
+        !/Cannot reach/i.test(stopped.message));
+  check('lens-local: the abort actually reached the fetch signal',
+        !!inFlight && inFlight.opts.signal.aborted === true);
+  // Nothing may stay registered once the request settles, or a later page change
+  // would abort whatever happened to be running then.
+  eq('lens-local: nothing stays registered after the request settles',
+     CTLensLocalEngine.cancelActive(), false);
+  // A second cancel with nothing in flight is a no-op, which is what makes it safe
+  // for background.js to call on every navigation regardless of the engine in use.
+  eq('lens-local: cancelling an idle engine reports nothing to do',
+     CTLensLocalEngine.cancelActive(), false);
 
   print('');
   if (failed) {

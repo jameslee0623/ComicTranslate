@@ -79,11 +79,24 @@
         </div>
         <p class="muted small">
           Google Lens finds the boxes and reads the text for free; only those
-          strings are POSTed to your own server as
-          {texts, source, target}, which answers
-          {translations} index-aligned with the input. The reply is drawn
-          onto the page exactly like the free engine does it. Bare host:port gets
-          /translate appended. The page image never leaves the browser.
+          strings are POSTed to your own server, which answers with the
+          translations index-aligned with the input. The reply is drawn onto the
+          page exactly like the free engine does it. A bare host:port is treated as
+          an OpenAI-compatible chat server (<code>/v1/chat/completions</code>),
+          which is what LM Studio, Ollama, vLLM and llama.cpp expose by default;
+          give the full path for anything else. The page image never leaves the
+          browser.
+        </p>
+        <p class="muted small">
+          Using LM Studio with a reasoning model? Turn OFF
+          <em>Separate reasoning_content and content in API responses</em> in its
+          Developer Settings. With it on, a model can put its entire answer in the
+          reasoning field and leave the answer itself empty, and there is then
+          nothing to draw on the page. Reasoning models are also slow — a 12B model
+          spent nearly two minutes on three short lines while testing — so a small
+          instruct model gives a far better experience. Switching to another page
+          cancels a translation that is still running, so the model stops
+          immediately instead of finishing work for the page you just left.
         </p>
         <p>
           <button id="lens-local-probe" class="secondary">Test local server</button>

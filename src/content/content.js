@@ -205,6 +205,16 @@
     });
     if (result.usage) lastUsage = result.usage;
 
+    // The background dropped this job because the page changed under it - either
+    // this one was aborted mid-generation, or it was still queued when the reader
+    // left. Neither is a failure and neither is a settled result: nothing was
+    // drawn, the local model may have been stopped, and the remaining images
+    // belong to a page that is gone. So it is reported as `stopped`, which keeps
+    // the image eligible and ends the run instead of walking 39 more panels.
+    if (result.skipped) {
+      return { ok: false, reason: result.reason || 'skipped', stopped: true };
+    }
+
     // Full-image engines (Lara) return a server-rendered translation: no
     // local painting at all, just put the bitmap into the page.
     if (result.image && result.image.bytes) {
@@ -316,6 +326,15 @@
 
           try {
             const outcome = await translateOne(candidate);
+            // The page changed under this run: stop walking the rest of its
+            // images. They are deliberately NOT marked seen - the reader may come
+            // straight back (bfcache, a "previous page" click) and every one of
+            // these is still untranslated, so marking them done would leave the
+            // page permanently half-translated with no error to explain it.
+            if (outcome && outcome.stopped) {
+              log('run stopped:', outcome.reason);
+              break;
+            }
             // Either it worked, or OCR found nothing worth drawing. Both are
             // settled results, so the element is done either way.
             CTImageScanner.markSeen(candidate.el);
@@ -510,6 +529,27 @@
     .then((data) => applyState(data.settings))
     .then((result) => log('booted', result))
     .catch((e) => console.warn('[CT] boot failed', e.message));
+
+  /**
+   * This document is going away - tell the background to stop paying for it.
+   *
+   * The background also watches tabs.onUpdated, which is the reliable path (this
+   * message can lose the race with the teardown, and a message that never arrives
+   * costs nothing because the listener covers it). It is sent anyway because it is
+   * the EARLIEST signal available: it reaches the background before the new page
+   * even starts loading, and it is the only signal at all for a navigation that
+   * tabs.onUpdated reports late or not at all, such as a bfcache move. Fire and
+   * forget - there is no reply to wait for in a document that is being torn down.
+   */
+  window.addEventListener('pagehide', () => {
+    try {
+      const sent = browser.runtime.sendMessage({ type: 'CT_CANCEL_TRANSLATE' });
+      // Guard the return value: a listener that has already gone away can make
+      // this throw or hand back something without catch(), and an unhandled
+      // rejection while the document is unloading is noise, not information.
+      if (sent && typeof sent.catch === 'function') sent.catch(() => {});
+    } catch (e) { /* the port is already gone; the tab listener has it */ }
+  });
 
   // Not debug-gated on purpose: the first thing a "nothing happens" report
   // needs to establish is whether the content script is in the page at all.

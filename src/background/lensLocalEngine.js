@@ -44,8 +44,15 @@
  *   The reply is read as text and parsed by hand, so all of these land in the
  *   same place: a chat envelope, a completion envelope, {"translations":[...]},
  *   a bare array, or an array wrapped in prose or a ```json fence - which is what
- *   a general LLM actually emits. Reasoning models' answer half is used and
- *   their reasoning half is discarded (see unwrapAssistantText).
+ *   a general LLM actually emits. A reasoning model's answer half is preferred
+ *   and its thinking half is ignored (see unwrapAssistantText); the one exception
+ *   is a reply whose answer half is EMPTY while the thinking half holds the work,
+ *   which LM Studio does by design when the two are split (see reasoningText).
+ *
+ * Page changes cancel the request. A local model is the only engine here that
+ * spends the user's own CPU/GPU per token, so when the reader turns the page the
+ * in-flight generation is aborted rather than left to finish into a document
+ * nobody is looking at (see cancelActive).
  *
  *   The "model" field is only sent for chat endpoints when the user names one;
  *   LM Studio accepts a model id, Ollama does not want one, and llama.cpp's
@@ -54,7 +61,10 @@
  * Index alignment is the whole contract: line i of `translations` translates
  * line i of `texts`. A length mismatch is an error, not a zip - silently pairing
  * the wrong strings would paint plausible nonsense into speech bubbles, which is
- * worse than failing loudly.
+ * worse than failing loudly. It is not the END of the run either: a batch whose
+ * answer does not line up is re-asked in halves, because a model that returns 15
+ * lines for 17 has merged or dropped something in the middle of a long list and
+ * has no trouble at all with nine (see translateTexts).
  *
  * Privacy: the OCR'd strings (and only those) travel to the URL the user typed -
  * localhost by default. No image ever reaches the local server, there is no
@@ -67,6 +77,52 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
 
   function log(settings, ...args) {
     if (settings && settings.debug) console.log('[CT/lens-local]', ...args);
+  }
+
+  /**
+   * The local request currently in flight, if any, so a page that navigates away
+   * can stop it. A local model is the one engine here that spends the user's OWN
+   * CPU/GPU on every token, and a comic page is read for seconds at a time: when
+   * the reader turns the page, a generation that is still running is worthless the
+   * moment it lands - it belongs to a document that no longer exists.
+   *
+   * There is no cancel route in the OpenAI-compatible API - LM Studio, Ollama,
+   * llama.cpp's server and vLLM all answer a chat request with one ordinary
+   * response - so the ONE mechanism all of them honour is closing the request.
+   * Every one of those servers stops generating when the socket drops, which is
+   * exactly what AbortController.abort() does. That is the difference between
+   * "stops now" and "keeps burning the GPU for another 1,500 tokens" on a
+   * reasoning model, which is what made this worth building.
+   *
+   * A single slot is enough: background.js funnels every translation through one
+   * promise chain, so at most one request exists at a time and a cancel can never
+   * hit the wrong page's work.
+   */
+  let activeRequest = null;
+
+  /**
+   * Stop the in-flight local request, if there is one. Returns whether anything
+   * was actually cancelled - false means there was nothing to stop, which is the
+   * normal answer when another engine is selected, because only this engine ever
+   * registers a request here.
+   */
+  function cancelActive() {
+    if (!activeRequest) return false;
+    activeRequest.cancelled = true;
+    try { activeRequest.ctrl.abort(); } catch (e) { /* already settled */ }
+    return true;
+  }
+
+  /**
+   * The error a cancelled job fails with. Distinguished by its `cancelled` flag,
+   * never by its message: background.js swallows these quietly, and the content
+   * script must not mark the image as seen - a reader who goes BACK to a page
+   * still wants it translated.
+   */
+  function cancelledError() {
+    const stopped = new Error('Cancelled: the page changed.');
+    stopped.cancelled = true;
+    return stopped;
   }
 
   /**
@@ -176,13 +232,19 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
   /**
    * The HTTP request for one page's strings.
    *
-   * The prompt is always built by buildPrompt - instruction first, outside any
-   * JSON - and is then wrapped for the detected endpoint family. `texts`,
+   * The prompt is always built by buildInstruction - instruction first, outside
+   * any JSON - and is then wrapped for the detected endpoint family. `texts`,
    * `source` and `target` are still sent for chat endpoints because a chat
    * server that is actually a dedicated translator can read them; a general LLM
    * ignores them and obeys the prompt. temperature 0: a comic page should get
    * the same translation on a re-read, and a reasoning model's "creative" pass
    * is exactly the wrong behaviour for fixed dialogue.
+   *
+   * A completion endpoint gets the prompt as the raw body (text/plain), not as
+   * JSON: the body IS the prompt there, and a JSON envelope would arrive as a JSON
+   * object printed into the model's context, pushing the instruction out of the
+   * first thing it reads. A chat endpoint has no text route at all - it needs the
+   * messages envelope - so the path decides, never a setting.
    */
   function buildRequest(endpoint, prompt, texts, target, source, settings) {
     const headers = {};
@@ -280,7 +342,15 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
     const to = languageLabel(target);
     const instruction = 'Translate the following ' + n + ' text(s) from ' + from +
       ' to ' + to + '. Reply with ONLY a JSON array of ' + n +
-      ' translated strings, in the same order, no explanations, no code fences.';
+      ' translated strings, in the same order, no explanations, no code fences.' +
+      // The anti-thinking clause is a mitigation, not a guarantee: a reasoning
+      // model obeys its own template first, and LM Studio can still route the
+      // whole reply into reasoning_content (bug #1602, handled by parseBody).
+      // What it does do is cut the reasoning short on models that read the
+      // instruction - which is the difference between a fast translation and
+      // 1,500 tokens of analysis for a page of dialogue.
+      ' Do not analyse the text and do not think step by step: output the array' +
+      ' itself as your very first characters, then stop.';
     return instruction + '\n' + JSON.stringify(texts);
   }
 
@@ -289,9 +359,20 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
    * this: quoted strings are skipped (brackets inside text must not throw the
    * depth count) and escapes inside strings are honoured. Of several parsing
    * windows, the longest wins - a correct array beats a quoted fragment.
+   *
+   * `expected`, when given, is the entry count the caller needs, and it makes the
+   * scan far more decisive than length ever could: an array with EXACTLY that many
+   * strings is the answer, and the LAST one is taken, because a reasoning model
+   * repeats its draft and then restates the final version. That is what makes it
+   * safe to look inside a `<think>` block or a separated reasoning_content field,
+   * where the same array appears several times and an earlier draft is not the
+   * reply. Without a count the old rule still applies, and the caller's length
+   * check rejects a wrong guess - loudly, never by mis-pairing.
    */
-  function extractJsonArray(raw) {
-    let best = null;
+  function extractJsonArray(raw, expected) {
+    let best = null;      // longest parseable window, whatever its length
+    let exact = null;     // the LAST window with exactly `expected` entries
+    const counted = typeof expected === 'number' && expected >= 0;
     for (let i = 0; i < raw.length; i++) {
       if (raw[i] !== '[') continue;
       let depth = 0;
@@ -313,7 +394,9 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
             const candidate = raw.slice(i, j + 1);
             try {
               const parsed = JSON.parse(candidate);
-              if (!best || candidate.length > best.candidate.length) {
+              if (counted && Array.isArray(parsed) && parsed.length === expected) {
+                exact = { candidate: candidate, parsed: parsed };
+              } else if (!best || candidate.length > best.candidate.length) {
                 best = { candidate: candidate, parsed: parsed };
               }
             } catch (e) { /* this window is prose, keep scanning */ }
@@ -322,7 +405,7 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
         }
       }
     }
-    return best;
+    return exact || best;
   }
 
   /**
@@ -347,6 +430,11 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
    * Returns the answer as a string, or null when this is not a chat envelope
    * (a dedicated translation server answering {"translations":[...]} passes
    * through untouched).
+   *
+   * A null return therefore means two different things - "not an envelope" and
+   * "an envelope whose answer half is EMPTY" - and the two are told apart by
+   * reasoningText(), which parseBody calls on the second. See its comment: an
+   * empty answer is not the same as no answer.
    */
   function unwrapAssistantText(data) {
     if (!data || typeof data !== 'object') return null;
@@ -372,6 +460,54 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
     if (data.message && typeof data.message.content === 'string' &&
         data.message.content.trim()) {
       return data.message.content;
+    }
+
+    return null;
+  }
+
+  /**
+   * The model's SCRATCH text, when the server split it out of the answer, or null.
+   *
+   * This exists because of a live failure, not a theory. A captured LM Studio reply
+   * (google/gemma-4-12b, LM Studio 0.4.6) came back as HTTP 200 with
+   * finish_reason "stop", an EMPTY message.content, and 1,526 reasoning tokens -
+   * every translated line sitting in reasoning_content. `enable_thinking: false`
+   * and a /no_think instruction do NOT prevent it; LM Studio's own bug tracker
+   * tracks it as "reasoning_content populated but content empty - server reports
+   * success on empty response" (#1602) and explains the cause: when the whole
+   * response falls inside the thinking half with nothing after it, the split
+   * leaves the answer field empty and calls it a success.
+   *
+   * The model did the work in that case, so throwing it away is the wrong answer -
+   * but it is only safe to accept because the caller knows how many entries it
+   * asked for and extractJsonArray can demand exactly that count. Reading this
+   * field WITHOUT a count would be the disaster the answer-only rule prevents:
+   * the reasoning quotes the source back, so an arbitrarily-chosen array from it
+   * could paint Japanese over every bubble and call it a translation.
+   *
+   * Covers every spelling of the field seen in the wild plus LM Studio's native
+   * { output: [ {type:"reasoning", content:...} ] } shape.
+   */
+  function reasoningText(data) {
+    if (!data || typeof data !== 'object') return null;
+
+    const boxes = [];
+    if (Array.isArray(data.choices) && data.choices.length) {
+      boxes.push(data.choices[0] && data.choices[0].message);
+    }
+    boxes.push(data.message, data);
+    for (const box of boxes) {
+      if (!box || typeof box !== 'object') continue;
+      for (const key of ['reasoning_content', 'reasoning', 'thinking']) {
+        if (typeof box[key] === 'string' && box[key].trim()) return box[key];
+      }
+    }
+
+    if (Array.isArray(data.output)) {
+      const parts = data.output
+        .filter((o) => o && o.type === 'reasoning')
+        .map((o) => String(o.content === undefined ? '' : o.content));
+      if (parts.length && parts.join('').trim()) return parts.join('\n');
     }
 
     return null;
@@ -484,13 +620,14 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
       if (answer !== null) {
         // A chat or completion envelope. The answer is a STRING that may itself
         // be JSON, may be code-fenced, may carry a sentence of prose - so parse
-        // that string. Never scan the whole body for an array: a reasoning
-        // model's scratch half quotes the source text back and would win,
-        // painting the untranslated original into every bubble with no error.
+        // that string. `expected` is passed so a reply that also quotes the
+        // source back (inside a <think> block, say, which LM Studio keeps in
+        // content when its reasoning splitter is off) resolves to the array with
+        // the right number of entries instead of the longest one.
         try {
           data = JSON.parse(answer);
         } catch (e2) {
-          const found = extractJsonArray(answer);
+          const found = extractJsonArray(answer, expected);
           data = found ? found.parsed : null;
         }
       } else {
@@ -504,12 +641,33 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
         if (reported) {
           throw new Error('Local server reported: ' + reported);
         }
+        // An envelope whose ANSWER is empty: a reasoning model that put the whole
+        // reply in its thinking half (LM Studio bug #1602). Recovering it needs
+        // the exact entry count, so a reply that produced no array of exactly
+        // `expected` strings is reported as the server misconfiguration it is,
+        // rather than as a parsing failure on our side. Testing reasoning here
+        // and not scanning the body blindly is what keeps the source text out.
+        const think = reasoningText(parsedBody);
+        if (think !== null) {
+          const found = typeof expected === 'number'
+            ? extractJsonArray(think, expected) : null;
+          if (found && Array.isArray(found.parsed) &&
+              found.parsed.length === expected) {
+            return normalizeTranslations(found.parsed, expected);
+          }
+          throw new Error(
+            'The local model spent its whole reply thinking (' + think.length +
+            ' characters) and left the answer empty - nothing was translated. ' +
+            'LM Studio does this while "Separate reasoning_content and content in ' +
+            'API responses" is on; switch that off in Developer Settings, or pick ' +
+            'a model that does not reason.');
+        }
         data = parsedBody;
       }
     } else {
       // Not JSON at all: a raw completion that wrapped the array in prose or a
       // code fence.
-      const found = extractJsonArray(text);
+      const found = extractJsonArray(text, expected);
       data = found ? found.parsed : null;
     }
 
@@ -520,6 +678,160 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
         '{"translations":["..."]}.');
     }
     return normalizeTranslations(data, expected);
+  }
+
+  /**
+   * How deep a batch may be divided when the model's answer does not line up.
+   * 2^5 = 32 pieces, so even a 40-line webtoon page reaches single-line batches.
+   * The cap is what keeps a model that fails at EVERY size from turning one page
+   * into an unbounded number of requests.
+   */
+  const MAX_SPLIT_DEPTH = 5;
+
+  /**
+   * Consecutive unparseable replies tolerated before the run stops asking.
+   *
+   * A local model spends the user's own CPU/GPU on every token, and a server or
+   * model that cannot answer a 3-line request is not going to answer the other 40
+   * either - walking the whole tree would multiply the wait by the length of the
+   * page. Any success resets the count, so an awkward page still finishes: only
+   * three failures WITH NOTHING IN BETWEEN give up. The lines given up on are left
+   * untranslated and reported, never guessed at.
+   */
+  const MAX_FAILED_STREAK = 3;
+
+  /**
+   * Send one request and return the reply body as TEXT, whatever the status.
+   *
+   * Read as text and parsed by hand rather than with res.json(), because a general
+   * LLM's answer is not reliably JSON and because an error status from a local
+   * server carries the real reason in its body too - and res.json() consumes the
+   * response stream even when its parse then throws.
+   *
+   * Every failure that is NOT about the reply's shape is marked `serverSide`, and
+   * that mark is what stops the batch splitter: re-asking a question that a dead
+   * or unreachable server could not answer would queue up more of the same wait,
+   * which on a local model is minutes per request.
+   */
+  async function postPrompt(job, endpoint, request) {
+    let res;
+    const timer = setTimeout(() => {
+      job.timedOut = true;
+      job.ctrl.abort();
+    }, 120000);
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: request.headers,
+        body: request.body,
+        signal: job.ctrl.signal
+      });
+    } catch (e) {
+      // A page change is not a failure, so it must not be reported as one: the
+      // reader moved on and the content script that asked for this reply is gone.
+      if (job.cancelled) throw cancelledError();
+      const err = new Error('Cannot reach the local server at ' + endpoint +
+        ' (' + (e && e.name === 'AbortError' && job.timedOut ? 'timed out after 120s'
+          : 'is it running?') + ').');
+      err.serverSide = true;
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // The body can still be streaming when the reader leaves, and an abort that
+    // lands between the fetch resolving and the parse would otherwise be handed
+    // back as a finished translation for a page nobody is looking at.
+    if (job.cancelled) throw cancelledError();
+
+    let bodyText = null;
+    try {
+      bodyText = await res.text();
+    } catch (e) {
+      bodyText = null;
+    }
+
+    if (!res.ok) {
+      let detail = 'HTTP ' + res.status;
+      const reported = bodyText ? serverErrorMessage(safeJson(bodyText)) : null;
+      if (reported) detail += ': ' + reported;
+      // A 404 from an unknown route, a 400 naming a model the server does not
+      // have, a 500 from an overloaded box: all "ask a different question", not
+      // "ask it in smaller pieces".
+      const err = new Error('Local server error (' + detail + ').');
+      err.serverSide = true;
+      throw err;
+    }
+    return bodyText;
+  }
+
+  /**
+   * Translate one batch of strings, dividing it when the model's answer does not
+   * line up.
+   *
+   * A 17-line page is the failure this exists for. A general LLM asked for 17
+   * translated strings sometimes returns 15: it merges a whispered aside into the
+   * line above it, or drops the narration box it decided was not dialogue. Both
+   * obvious responses to that are wrong. Pairing 15 with the first 15 source lines
+   * shifts every bubble after the merge and paints the wrong dialogue into it -
+   * and failing the whole page throws away 15 perfectly good translations over one
+   * formatting slip, which is what the reader experiences as "the extension is
+   * broken".
+   *
+   * So the batch is divided and each half asked for on its own: 17 lines become
+   * 9 + 8, and a model that drops a line out of 17 usually has no trouble with
+   * nine. Every request is still checked against its OWN exact count, so this
+   * cannot mis-pair anything - the guarantee is unchanged, it is just applied per
+   * batch - and the pieces are concatenated in order, which is what keeps line i
+   * translating region i.
+   *
+   * A line that will not pair even on its own is left UNTRANSLATED rather than
+   * guessed at: the painter falls back to the region's original text, so that
+   * bubble keeps the source the reader can already read, and a wrong dialogue or a
+   * blank bubble are both worse. imageToRegions reports the lines that were given
+   * up on, and still throws when NOTHING could be paired, so a broken setup cannot
+   * pass for a working one.
+   */
+  async function translateTexts(job, endpoint, texts, target, source, settings, tally, depth) {
+    // Checked before the request, not only after it: a cancel that lands between
+    // two requests of a split batch must stop the next one from being sent at all.
+    if (job.cancelled) throw cancelledError();
+
+    const request = buildRequest(endpoint, buildInstruction(texts, target, source),
+      texts, target, source, settings);
+
+    try {
+      tally.requests++;
+      const bodyText = await postPrompt(job, endpoint, request);
+      const translations = parseBody(bodyText, texts.length);
+      tally.failedStreak = 0;
+      return translations;
+    } catch (err) {
+      // Not the reply's shape: the page changed, or the server itself failed.
+      if (err && (err.cancelled || err.serverSide)) throw err;
+
+      tally.failedStreak++;
+      if (!tally.firstError) tally.firstError = err;
+
+      // Nothing smaller to ask for (a single line), the depth cap is reached, or
+      // the model has failed everything in a row: give up on this batch. Its
+      // lines stay untranslated rather than paired with a guess - and when that
+      // turns out to be the whole page, imageToRegions throws the first error, so
+      // the failure is as loud as it was before, just later.
+      if (texts.length <= 1 || depth >= MAX_SPLIT_DEPTH ||
+          tally.failedStreak >= MAX_FAILED_STREAK) {
+        tally.dropped += texts.length;
+        return texts.map(() => '');
+      }
+
+      const mid = Math.ceil(texts.length / 2);
+      tally.splits++;
+      const head = await translateTexts(job, endpoint, texts.slice(0, mid),
+        target, source, settings, tally, depth + 1);
+      const tail = await translateTexts(job, endpoint, texts.slice(mid),
+        target, source, settings, tally, depth + 1);
+      return head.concat(tail);
+    }
   }
 
   /**
@@ -569,55 +881,44 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
     diagnostics.endpoint = endpoint;
     const target = String(req.targetLang || 'en');
 
-    // text/plain, not application/json: the body IS the prompt. A completion
-    // endpoint (llama.cpp, Ollama /api/generate, LM Studio's text completions)
-    // consumes the raw text; a JSON envelope would arrive as a JSON object
-    // printed into the model's context, and the instruction would stop being
-    // the first thing it reads. A CHAT endpoint (LM Studio, Ollama, vLLM) has no
-    // text route at all - it needs the JSON messages envelope - so buildRequest
-    // picks the right one from the URL.
-    const request = buildRequest(endpoint, buildInstruction(texts, target, sourceLang),
-      texts, target, sourceLang, settings);
-
+    // One request per batch, and each batch's answer is checked against its own
+    // count, so a model that returns 15 lines for 17 is re-asked in smaller pieces
+    // rather than either failing the page or being quietly mis-paired (see
+    // translateTexts).
     log(settings, 'POSTing', texts.length, 'strings to', endpoint);
-    let res;
+    // Registered for the WHOLE sequence rather than for one fetch: a divided batch
+    // makes several requests, and a cancel landing in the gap between two of them
+    // must still stop the next one. Cleared the moment the last one is done, so the
+    // window a page change can cancel in is exactly the window work is happening.
+    const job = { ctrl: new AbortController(), cancelled: false, timedOut: false };
+    activeRequest = job;
+    const tally = { requests: 0, splits: 0, dropped: 0, failedStreak: 0, firstError: null };
+    let translations;
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 120000);
-      try {
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: request.headers,
-          body: request.body,
-          signal: ctrl.signal
-        });
-      } finally {
-        clearTimeout(timer);
-      }
-    } catch (e) {
-      throw new Error('Cannot reach the local server at ' + endpoint +
-        ' (' + (e && e.name === 'AbortError' ? 'timed out after 120s'
-          : 'is it running?') + ').');
+      translations = await translateTexts(job, endpoint, texts, target, sourceLang,
+        settings, tally, 0);
+    } finally {
+      if (activeRequest === job) activeRequest = null;
     }
 
-    // Read the body ONCE, as text, whatever the status: an error status from a
-    // local server carries the real reason in its body too, and res.json() would
-    // consume the stream that parseBody needs.
-    let bodyText = null;
-    try {
-      bodyText = await res.text();
-    } catch (e) {
-      bodyText = null;
+    // A line we could not pair is left untranslated on purpose - the painter then
+    // falls back to the region's original text, which is the honest outcome - but
+    // the page it leaves behind must not look like a clean success, so it gets one
+    // visible line. Not debug-gated: "why is this bubble still in Japanese?" should
+    // not require turning on debug logging to answer. A TOTAL failure needs no
+    // warning here: the throw below reports it in full.
+    if (tally.dropped && tally.dropped < texts.length) {
+      const warnMsg = '[CT/lens-local] ' + tally.dropped + ' of ' + texts.length +
+        ' line(s) came back unpaired and were left untranslated (' + tally.requests +
+        ' request(s), ' + tally.splits + ' re-asked in smaller batches). First ' +
+        'problem: ' + (tally.firstError ? tally.firstError.message : 'unknown');
+      if (typeof console !== 'undefined' && console.warn) console.warn(warnMsg);
     }
 
-    if (!res.ok) {
-      let detail = 'HTTP ' + res.status;
-      const reported = bodyText ? serverErrorMessage(safeJson(bodyText)) : null;
-      if (reported) detail += ': ' + reported;
-      throw new Error('Local server error (' + detail + ').');
-    }
-
-    const translations = parseBody(bodyText, texts.length);
+    // Every line failed: that is the whole page, so report the first real problem
+    // instead of handing back a page of untranslated bubbles, which looks exactly
+    // like a working engine that found nothing to translate.
+    if (tally.dropped >= texts.length && tally.firstError) throw tally.firstError;
 
     const finalRegions = regions.map((r, i) =>
       Object.assign({}, r, { translated: translations[i] || '' })
@@ -627,8 +928,17 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
       language: sourceLang,
       regions: finalRegions.length,
       translated: finalRegions.filter((r) => r.translated).length,
+      batches: tally.requests,
+      untranslated: tally.dropped,
       endpoint: endpoint
     });
+
+    // How many requests the page actually cost (a clean page is one, a page whose
+    // model dropped a line is two or three) and how many lines were given up on -
+    // both visible in the popup's diagnostics, because "the model needs two tries
+    // on a long page" is worth knowing without reading the console.
+    diagnostics.batches = tally.requests;
+    diagnostics.untranslated = tally.dropped;
 
     return {
       regions: finalRegions,
@@ -660,9 +970,12 @@ if (typeof globalThis.CTLensLocalEngine === 'undefined') {
     buildInstruction,
     unwrapCompletionText,
     unwrapAssistantText,
+    reasoningText,
     extractJsonArray,
     normalizeTranslations,
     log,
+    cancelActive,
+    translateTexts,
     imageToRegions
   };
 }
