@@ -16,9 +16,25 @@ const FIELDS = [
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
+let optionEngines = [];
+let uiLanguage = 'en';
+
 const saveState = document.getElementById('save-state');
 
 function el(id) { return document.getElementById(id); }
+
+function t(key) {
+  return CTI18n.t(key);
+}
+
+function tr(key, fallback) {
+  const value = t(key);
+  return value === key ? fallback : value;
+}
+
+function msg(key, values) {
+  return CTI18n.interpolate(t(key), values);
+}
 
 async function bg(type, payload) {
   const reply = await browser.runtime.sendMessage(Object.assign({ type }, payload));
@@ -33,7 +49,7 @@ function fillLanguageSelects(sourceLang, targetLang) {
     if (includeAuto) {
       const auto = document.createElement('option');
       auto.value = 'auto';
-      auto.textContent = 'Detect automatically';
+      auto.textContent = t('options_detect_auto');
       select.appendChild(auto);
     }
     for (const lang of globalThis.CT_LANGUAGES) {
@@ -50,37 +66,25 @@ function fillLanguageSelects(sourceLang, targetLang) {
 }
 
 function fillEngines(engines, selected) {
+  optionEngines = engines;
   const sel = el('engineId');
   sel.textContent = '';
   for (const engine of engines) {
     const opt = document.createElement('option');
     opt.value = engine.id;
-    opt.textContent = engine.label;
+    const key = 'engine_' + engine.id.replace(/-/g, '_');
+    opt.textContent = tr(key, engine.label || engine.id);
     sel.appendChild(opt);
   }
   sel.value = selected;
   const current = engines.find((e) => e.id === selected);
-  el('engine-note').textContent = current
-    ? (current.id === 'lara'
-        ? 'Paid API, official and stable. Each image bills a FLAT 10,000 characters, ' +
-          'so Pro (500,000/month) covers about 50 pages - watch the usage panel ' +
-          'below. Enter credentials, then use "Test Lara credentials".'
-        : current.id === 'lens-lara'
-          ? 'Free anonymous Lens OCR finds the boxes; only the text goes to Lara, ' +
-            'billed by the characters actually sent (a manga page is usually ' +
-            '500-1,500) - so the 10,000 chars/month of API access on the free plan ' +
-            'covers roughly 10-20 pages. Same Lara credentials below.'
-          : current.needsKey
-            ? 'This engine needs an API key before it will work.'
-            : current.id === 'lens-local'
-              ? 'Google Lens finds the text boxes and reads the characters for ' +
-                'free; only those strings are POSTed to the server URL below ' +
-                '(your machine only) to be translated, and the result is drawn ' +
-                'onto the page exactly like the free engine. Enter the URL, then ' +
-                'use "Test local server".'
-              : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
-                'without notice.')
-    : '';
+  const noteKey = current && (
+    current.id === 'lara' ? 'engine_note_lara' :
+    current.id === 'lens-lara' ? 'engine_note_lens_lara' :
+    current.id === 'lens-local' ? 'engine_note_lens_local' :
+    current.needsKey ? 'engine_note_needs_key' : 'engine_note_none_needed'
+  );
+  el('engine-note').textContent = noteKey ? t(noteKey) : '';
   el('lara-fields').hidden = !(current &&
     (current.id === 'lara' || current.id === 'lens-lara'));
   el('lens-local-fields').hidden = !(current && current.id === 'lens-local');
@@ -96,12 +100,21 @@ async function broadcast(settings) {
 
 function flash(text) {
   saveState.textContent = text;
-  setTimeout(() => { saveState.textContent = 'Changes save as you edit.'; }, 1500);
+  setTimeout(() => { saveState.textContent = t('options_save_notice'); }, 1500);
+}
+
+async function applyLanguage(requested) {
+  try {
+    uiLanguage = await CTI18n.init(requested || 'auto');
+  } catch (e) {
+    uiLanguage = 'en';
+  }
+  CTI18n.apply(document);
 }
 
 async function save(patch) {
   const data = await bg('CT_SET_SETTINGS', { patch });
-  flash('Saved.');
+  flash(t('options_saved'));
   broadcast(data.settings);
   return data.settings;
 }
@@ -110,6 +123,8 @@ async function load() {
   const data = await bg('CT_GET_SETTINGS');
   const s = data.settings;
 
+  el('uiLanguage').value = s.uiLanguage || 'auto';
+  await applyLanguage(s.uiLanguage || 'auto');
   fillLanguageSelects(s.sourceLang, s.targetLang);
   fillEngines(data.engines, s.engineId);
   el('fontFamily').value = s.fontFamily || '';
@@ -138,13 +153,14 @@ async function renderUsage() {
     const cap = Number(el('laraMonthlyCap').value) || 10000;
     fill.style.width = Math.min(100, (u.totalChars / cap) * 100).toFixed(1) + '%';
     fill.classList.toggle('over', u.totalChars > cap);
-    text.textContent =
-      u.textChars.toLocaleString() + ' text chars + ' + u.imageCount +
-      ' image(s) ×10,000 = ' + u.totalChars.toLocaleString() + ' / ' +
-      cap.toLocaleString() + ' chars' +
-      (u.totalChars > cap ? ' — over the reference cap' : ' this month');
+    text.textContent = msg('options_usage_details', {
+      text: u.textChars.toLocaleString(),
+      images: u.imageCount,
+      total: u.totalChars.toLocaleString(),
+      cap: cap.toLocaleString()
+    });
   } catch (e) {
-    text.textContent = 'Could not load usage: ' + e.message;
+    text.textContent = t('options_usage_error') + e.message;
   }
 }
 
@@ -161,6 +177,14 @@ for (const id of CHECKBOXES) {
   el(id).addEventListener('change', () => save({ [id]: el(id).checked }));
 }
 
+el('uiLanguage').addEventListener('change', async () => {
+  const saved = await save({ uiLanguage: el('uiLanguage').value });
+  await applyLanguage(saved.uiLanguage);
+  fillLanguageSelects(el('sourceLang').value, el('targetLang').value);
+  fillEngines(optionEngines, el('engineId').value);
+  await renderUsage();
+});
+
 el('domains').addEventListener('change', () => {
   const domains = el('domains').value
     .split('\n')
@@ -172,7 +196,7 @@ el('domains').addEventListener('change', () => {
 
 el('clear-cache').addEventListener('click', async () => {
   await bg('CT_CACHE_CLEAR');
-  out.textContent = 'Cache cleared.';
+  saveState.textContent = t('options_cache_cleared_msg');
 });
 
 // Changing the cap reference re-renders the usage bar immediately.
@@ -181,12 +205,12 @@ el('laraMonthlyCap').addEventListener('change', () => renderUsage());
 el('reset-usage').addEventListener('click', async () => {
   await bg('CT_RESET_USAGE');
   await renderUsage();
-  flash('Usage counter reset.');
+  flash(t('options_counter_reset'));
 });
 
 el('lara-probe').addEventListener('click', async () => {
   const note = el('lara-probe-result');
-  note.textContent = 'Checking…';
+  note.textContent = t('options_testing_creds');
   try {
     // Save first: the probe authenticates with whatever is in the fields now.
     await save({
@@ -194,10 +218,10 @@ el('lara-probe').addEventListener('click', async () => {
       laraAccessKeySecret: el('laraAccessKeySecret').value.trim()
     });
     const data = await bg('CT_LARA_PROBE');
-    const when = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'unknown';
-    note.textContent = 'Credentials accepted. Token expires ' + when + '.';
+    const when = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : t('options_unknown');
+    note.textContent = t('options_creds_valid') + when + '.';
   } catch (e) {
-    note.textContent = 'Failed: ' + e.message;
+    note.textContent = t('options_creds_invalid') + e.message;
   }
 });
 
@@ -212,19 +236,20 @@ el('engineId').addEventListener('change', () => {
 
 el('lens-local-probe').addEventListener('click', async () => {
   const note = el('lens-local-probe-result');
-  note.textContent = 'Checking…';
+  note.textContent = t('options_testing');
   try {
     // Save first: the probe talks to whatever URL is in the field now. It sends
     // no page text - only an empty request that proves the server is listening.
     await save({ localTextUrl: el('localTextUrl').value.trim() });
     const data = await bg('CT_LOCAL_TEXT_PROBE');
-    note.textContent = data.status === 404 || data.status === 405
-      ? 'Server is reachable (HTTP ' + data.status + ') — it does not accept ' +
-        'POST on this path; check the URL and the method.'
-      : 'Server is reachable (HTTP ' + data.status + ').';
+    if (data.status === 404 || data.status === 405) {
+      note.textContent = msg('options_server_bad_method', { status: data.status });
+    } else {
+      note.textContent = msg('options_server_reachable_detail', { status: data.status });
+    }
   } catch (e) {
-    note.textContent = 'Failed: ' + e.message;
+    note.textContent = t('options_server_failed') + e.message;
   }
 });
 
-load().catch((e) => { saveState.textContent = 'Could not load settings: ' + e.message; });
+load().catch((e) => { saveState.textContent = t('options_load_error') + e.message; });

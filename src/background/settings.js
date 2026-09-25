@@ -36,6 +36,12 @@ if (typeof globalThis.CTSettings === 'undefined') {
     targetLang: 'en',
 
     /**
+     * Extension interface language. 'auto' follows the browser UI locale;
+     * the popup and options page support en, zh-CN, zh-TW, ja and ko.
+     */
+    uiLanguage: 'auto',
+
+    /**
      * Ignore images smaller than this on either axis. 600px filters icons,
      * spacers, avatars and - importantly - manga thumbnail grids, each of which
      * would otherwise cost a full upload and a translation slot. Real page

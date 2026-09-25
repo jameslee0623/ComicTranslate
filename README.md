@@ -1,9 +1,19 @@
 # ComicTranslate
 
 A browser extension for **Firefox and Chrome** that translates the text inside
-pictures — comics, manga, webtoons — right on the page: it finds the images,
-reads the lettering, translates it, erases the original text and draws the
-translation in its place.
+pictures — comics, manga, webtoons — right on the page. It finds images, reads
+the lettering, translates it, erases the original text, and draws the translation
+in its place.
+
+## Languages
+
+The extension interface is available in English, 简体中文, 繁體中文, 日本語, and 한국어. Choose **Settings → Languages → Interface language**; **Match browser** follows the browser UI language by default.
+
+- [English](README.md)
+- [简体中文](README.zh-CN.md)
+- [繁體中文](README.zh-TW.md)
+- [日本語](README.ja.md)
+- [한국어](README.ko.md)
 
 ## What it does
 

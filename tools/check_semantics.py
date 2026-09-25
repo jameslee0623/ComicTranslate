@@ -60,13 +60,64 @@ for html in ["src/popup/popup.html", "src/options/options.html"]:
 settings_src = open("src/background/settings.js").read()
 for key in ["renderMode", "scanBackgrounds", "textStroke", "fontFamily", "minImageSize",
             "maxImagesPerPage", "requestDelayMs", "cacheTtlDays", "domainMode", "domains",
-            "debug", "engineId", "sourceLang", "targetLang", "enabled",
+            "debug", "engineId", "sourceLang", "targetLang", "uiLanguage", "enabled",
             "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap",
             "localTextUrl", "localTextApiKey"]:
     if not re.search(r"\b" + key + r"\s*:", settings_src):
         fail("settings.js DEFAULTS is missing key: " + key)
 
-# 4. options.js must only touch ids that exist in options.html
+# 4a. Locale catalogs must be valid, complete, and match every UI key.
+locale_root = "_locales"
+required_locales = {"en", "zh_CN", "zh_TW", "ja", "ko"}
+actual_locales = {name for name in os.listdir(locale_root)
+                  if os.path.isdir(os.path.join(locale_root, name))}
+if not required_locales.issubset(actual_locales):
+    fail("missing UI locale directories: " + ", ".join(sorted(required_locales - actual_locales)))
+
+catalogs = {}
+for locale in sorted(required_locales):
+    path = os.path.join(locale_root, locale, "messages.json")
+    if not os.path.exists(path):
+        fail("missing locale catalog: " + path)
+        continue
+    try:
+        catalogs[locale] = json.load(open(path))
+    except Exception as exc:
+        fail("invalid locale catalog " + path + ": " + str(exc))
+
+if "en" in catalogs:
+    english_keys = set(catalogs["en"])
+    for locale, catalog in catalogs.items():
+        if locale == "en":
+            continue
+        if set(catalog) != english_keys:
+            missing = sorted(english_keys - set(catalog))
+            extra = sorted(set(catalog) - english_keys)
+            fail("locale " + locale + " key mismatch; missing=" + str(missing) +
+                 " extra=" + str(extra))
+    for key, value in catalogs["en"].items():
+        if not isinstance(value, dict) or not isinstance(value.get("message"), str):
+            fail("locale en has invalid message entry: " + key)
+    # Chrome rejects an undeclared $NAME$ placeholder while loading the
+    # manifest. UI messages use CTI18n.interpolate() with {name} instead, so
+    # no locale message should contain Chrome's placeholder syntax.
+    for locale, catalog in catalogs.items():
+        for key, value in catalog.items():
+            message = value.get("message", "") if isinstance(value, dict) else ""
+            if re.search(r"\$[A-Z][A-Z0-9_]*\$", message):
+                fail("locale " + locale + " has an undeclared Chrome placeholder in " + key)
+
+    ui_files = [path for path in ("src/popup/popup.html", "src/popup/popup.js",
+                                  "src/options/options.html", "src/options/options.js")]
+    for path in ui_files:
+        src = open(path).read()
+        keys = set(re.findall(r'data-i18n(?:-title|-placeholder|-html)?="([^"]+)"', src))
+        keys.update(re.findall(r"\bt\('([^']+)'\)", src))
+        keys.update(re.findall(r"\bmsg\('([^']+)'", src))
+        for key in sorted(keys - english_keys):
+            fail(path + " references missing locale key: " + key)
+
+# 5. options.js must only touch ids that exist in options.html
 html_ids = set(re.findall(r'id="([^"]+)"', open("src/options/options.html").read()))
 options_src = open("src/options/options.js").read()
 used = set(re.findall(r"el\('([^']+)'\)", options_src))
@@ -187,6 +238,8 @@ for html in ["src/popup/popup.html", "src/options/options.html"]:
     if not scripts or os.path.basename(scripts[0]) != "compat.js":
         first = scripts[0] if scripts else "no scripts"
         fail(f"{html} must load shared/compat.js first (got {first})")
+    if "i18n.js" not in [os.path.basename(path) for path in scripts]:
+        fail(f"{html} must load shared/i18n.js before its UI script")
 
 # 9. Chrome runs the background as a SERVICE WORKER, which has no DOM at all.
 #    A bare `document.`/`window.` there is a ReferenceError on Chrome and works

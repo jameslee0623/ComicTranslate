@@ -43,7 +43,8 @@ DIST = os.path.join(ROOT, 'dist')
 
 # Copied verbatim into each build. `tools/` is deliberately excluded: the
 # verifier is not part of the shipped extension.
-INCLUDE = ['manifest.json', 'src', 'assets', 'README.md']
+INCLUDE = ['manifest.json', '_locales', 'src', 'assets', 'README.md',
+           'README.zh-TW.md', 'README.zh-CN.md', 'README.ja.md', 'README.ko.md']
 
 # Chrome flattens `background` to a single service worker. Promise-based MV3
 # APIs and storage.session need 102+; 111 is a comfortable floor that costs

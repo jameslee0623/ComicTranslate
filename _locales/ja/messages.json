@@ -1,0 +1,403 @@
+{
+  "extensionName": {
+    "message": "ComicTranslate",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "画像や漫画の中の文字をそのまま翻訳し、画像を翻訳版に置き換えるブラウザ拡張機能です。",
+    "description": "Extension description"
+  },
+  "popup_enabled": {
+    "message": "有効"
+  },
+  "popup_checking_page": {
+    "message": "ページを確認しています…"
+  },
+  "popup_add_site": {
+    "message": "このサイトを翻訳リストに追加"
+  },
+  "popup_remove_site": {
+    "message": "Remove this site from the translating list"
+  },
+  "popup_translate_into": {
+    "message": "翻訳先の言語"
+  },
+  "popup_engine": {
+    "message": "翻訳エンジン"
+  },
+  "popup_sites": {
+    "message": "サイト"
+  },
+  "popup_translate_now": {
+    "message": "今すぐ翻訳"
+  },
+  "popup_restore_page": {
+    "message": "ページを復元"
+  },
+  "popup_ready": {
+    "message": "準備完了"
+  },
+  "popup_settings": {
+    "message": "設定"
+  },
+  "popup_clear_cache": {
+    "message": "キャッシュを消去"
+  },
+  "popup_page_translating": {
+    "message": "ページを翻訳しています…"
+  },
+  "popup_page_paused": {
+    "message": "一時停止中：拡張機能が無効です。"
+  },
+  "popup_page_allowed": {
+    "message": "Active on this site."
+  },
+  "popup_page_ignored": {
+    "message": "Not translating: site not in your list."
+  },
+  "popup_page_restricted": {
+    "message": "ブラウザの特殊ページ（翻訳できません）。"
+  },
+  "popup_site_all": {
+    "message": "All sites are active."
+  },
+  "popup_site_blocked": {
+    "message": "{host} はブロックリストにあるため翻訳されません。"
+  },
+  "popup_site_not_in_list": {
+    "message": "{host} は翻訳リストにないため翻訳されません。"
+  },
+  "popup_site_in_list": {
+    "message": "{host} は翻訳リストにあります。"
+  },
+  "popup_clearing_cache": {
+    "message": "Clearing cache…"
+  },
+  "popup_cache_cleared": {
+    "message": "Cache cleared."
+  },
+  "popup_cache_clear_failed": {
+    "message": "Failed to clear cache: {error}"
+  },
+  "popup_translating_now": {
+    "message": "Translating now…"
+  },
+  "popup_restoring_page": {
+    "message": "Restoring page…"
+  },
+  "popup_page_restored": {
+    "message": "Page restored."
+  },
+  "popup_restore_failed": {
+    "message": "Restore failed: {error}"
+  },
+  "popup_translate_this_site": {
+    "message": "このサイトを翻訳"
+  },
+  "popup_no_page": {
+    "message": "利用可能なページがありません。"
+  },
+  "popup_site_translated": {
+    "message": "{host} は翻訳対象です（ブロックリストにはありません）。"
+  },
+  "popup_remove_from_blocklist": {
+    "message": "ブロックリストから削除"
+  },
+  "popup_block_site": {
+    "message": "このサイトをブロック"
+  },
+  "popup_remove_site_named": {
+    "message": "{host} を翻訳リストから削除"
+  },
+  "popup_active_on": {
+    "message": "{host} で有効"
+  },
+  "popup_excluded_on": {
+    "message": "{host} は除外されています（設定を確認してください）。"
+  },
+  "popup_reload_page": {
+    "message": "有効にするにはページを再読み込みしてください。"
+  },
+  "popup_site_list_updated": {
+    "message": "サイトリストを更新しました。"
+  },
+  "popup_restored": {
+    "message": "{count} 枚の画像を復元しました。"
+  },
+  "popup_error": {
+    "message": "エラー：{error}"
+  },
+  "popup_usage": {
+    "message": "Lara 今月：{total} / {cap} 文字（テキスト {text} + 画像 {images} 枚 ×10k）。"
+  },
+  "popup_summary": {
+    "message": "このページ：{translated} 枚翻訳、{failed} 枚失敗、{skipped} 枚スキップ。{quota}{error}"
+  },
+  "engine_lara": {
+    "message": "Lara 画像（公式）"
+  },
+  "engine_lens_lara": {
+    "message": "Lens + Lara テキスト"
+  },
+  "engine_lens": {
+    "message": "Google Lens（無料）"
+  },
+  "engine_lens_local": {
+    "message": "Lens OCR + 自分のローカル AI"
+  },
+  "popup_summary_prefix": {
+    "message": "On this page: "
+  },
+  "popup_summary_translated": {
+    "message": " translated, "
+  },
+  "popup_summary_failed": {
+    "message": " failed, "
+  },
+  "popup_summary_skipped": {
+    "message": " skipped."
+  },
+  "popup_summary_quota_stopped": {
+    "message": " Lara の上限に達したため停止しました。"
+  },
+  "popup_summary_last_error": {
+    "message": " 最終エラー："
+  },
+  "engine_note_lara": {
+    "message": "公式 API。画像1枚につき10,000文字が固定課金されます。40ページで約400,000文字になります。設定で資格情報を入力してください。"
+  },
+  "engine_note_lens_lara": {
+    "message": "公式 API のテキストモード。送信した文字数課金です。設定で資格情報を入力してください。"
+  },
+  "engine_note_lens": {
+    "message": "APIキー不要。Googleの未公開エンドポイントを使用するため、予告なく変更される可能性があります。"
+  },
+  "engine_note_lens_local": {
+    "message": "Lensが無料で文字を読み取り、抽出した文字列だけを自分のローカルサーバーへ送ります。設定でURLを入力してください。"
+  },
+  "engine_note_needs_key": {
+    "message": "APIキーが必要です（設定）。"
+  },
+  "engine_note_none_needed": {
+    "message": "APIキー不要。"
+  },
+  "options_lara_placeholder": {
+    "message": "app.laratranslate.com/account/credentials から取得"
+  },
+  "options_loading": {
+    "message": "読み込み中…"
+  },
+  "options_ui_language": {
+    "message": "インターフェース言語"
+  },
+  "options_ui_auto": {
+    "message": "ブラウザーに合わせる"
+  },
+  "options_saved": {
+    "message": "保存しました。"
+  },
+  "options_unknown": {
+    "message": "不明"
+  },
+  "options_usage_details": {
+    "message": "テキスト {text} 文字 + 画像 {images} 枚 ×10,000 = {total} / {cap} 文字（今月）"
+  },
+  "options_usage_error": {
+    "message": "使用量を取得できませんでした："
+  },
+  "options_load_error": {
+    "message": "設定を読み込めませんでした："
+  },
+  "options_server_bad_method": {
+    "message": "サーバーに接続できました（HTTP {status}）。このパスは POST を受け付けません。"
+  },
+  "options_server_reachable_detail": {
+    "message": "サーバーに接続できました（HTTP {status}）。"
+  },
+  "options_title": {
+    "message": "ComicTranslate — 設定"
+  },
+  "options_heading": {
+    "message": "ComicTranslate の設定"
+  },
+  "options_languages": {
+    "message": "言語"
+  },
+  "options_source_lang": {
+    "message": "元の言語"
+  },
+  "options_lara_help": {
+    "message": "Lara の画像エンジンは画像1枚につき10,000文字が固定課金されます。Lens OCR + Lara テキストは送信した文字数だけを消費します。<a href=\"https://app.laratranslate.com/account/credentials\" target=\"_blank\" rel=\"noreferrer\">資格情報を取得</a>。"
+  },
+  "options_get_credentials": {
+    "message": "資格情報を取得"
+  },
+  "options_test_lara": {
+    "message": "Lara の資格情報をテスト"
+  },
+  "options_local_url": {
+    "message": "ローカルサーバー URL"
+  },
+  "options_local_api_key": {
+    "message": "API キー（任意）"
+  },
+  "options_local_api_key_placeholder": {
+    "message": "サーバーがベアラートークンを要求する場合のみ入力"
+  },
+  "options_local_help_1": {
+    "message": "Google Lens が文字を読み取り、抽出した文字列だけをローカルサーバーへ送ります。サーバーには入力と同じ順序の JSON 翻訳配列を返してください。LM Studio、Ollama、vLLM、llama.cpp に対応しています。元画像はブラウザーの外に出ません。"
+  },
+  "options_local_help_2": {
+    "message": "LM Studio の推論モデルを使う場合は、Developer Settings で reasoning_content と content の分離をオフにしてください。小さな instruct モデルが速く、ページを切り替えると実行中の翻訳は中止されます。"
+  },
+  "options_test_local": {
+    "message": "ローカルサーバーをテスト"
+  },
+  "options_rendering": {
+    "message": "描画"
+  },
+  "options_font_family": {
+    "message": "フォント（空欄で内蔵フォント）"
+  },
+  "options_font_family_placeholder": {
+    "message": "e.g. Comic Neue, sans-serif"
+  },
+  "options_text_stroke": {
+    "message": "翻訳文字に輪郭を付ける"
+  },
+  "options_scan_backgrounds": {
+    "message": "CSS の背景画像も翻訳する"
+  },
+  "options_limits": {
+    "message": "制限"
+  },
+  "options_min_image_size": {
+    "message": "最小画像サイズ（px）"
+  },
+  "options_max_images": {
+    "message": "1ページあたりの最大画像数"
+  },
+  "options_request_delay": {
+    "message": "リクエスト間隔（ms）"
+  },
+  "options_delay_hint": {
+    "message": "間隔が短いと Google によりすぐに制限されます。1500 ms を推奨します。"
+  },
+  "options_privacy": {
+    "message": "プライバシー"
+  },
+  "options_privacy_text": {
+    "message": "処理する画像は OCR と翻訳のために Google に送信されます。リクエストは匿名で、Cookie やアカウント情報は送信されません。"
+  },
+  "options_sites": {
+    "message": "サイト"
+  },
+  "options_apply_to": {
+    "message": "適用先"
+  },
+  "options_domain_mode_all": {
+    "message": "すべてのサイト"
+  },
+  "options_domain_mode_blocklist": {
+    "message": "リスト以外のすべてのサイト"
+  },
+  "options_domain_mode_allowlist": {
+    "message": "リスト内のサイトのみ"
+  },
+  "options_domains_label": {
+    "message": "ドメイン（1行に1つ、サフィックス一致）"
+  },
+  "options_cache": {
+    "message": "キャッシュ"
+  },
+  "options_cache_ttl": {
+    "message": "结果的保持期間（日、0で保存しない）"
+  },
+  "options_clear_cache_btn": {
+    "message": "翻訳キャッシュを消去"
+  },
+  "options_lara_usage": {
+    "message": "Lara の使用量"
+  },
+  "options_lara_usage_desc": {
+    "message": "Lara エンジンの今月の使用量です。"
+  },
+  "options_monthly_cap": {
+    "message": "月間上限の参考値（文字）"
+  },
+  "options_reset_usage": {
+    "message": "カウンターをリセット"
+  },
+  "options_advanced": {
+    "message": "詳細設定"
+  },
+  "options_debug_logging": {
+    "message": "バックグラウンドコンソールに詳細ログを出力"
+  },
+  "options_save_notice": {
+    "message": "変更はすぐに保存されます。"
+  },
+  "options_testing": {
+    "message": "テスト中…"
+  },
+  "options_testing_creds": {
+    "message": "認証情報をテスト中…"
+  },
+  "options_creds_valid": {
+    "message": "認証情報は有効です。トークンの有効期限："
+  },
+  "options_creds_invalid": {
+    "message": "認証情報が拒否されました："
+  },
+  "options_server_reachable": {
+    "message": "サーバーに接続できました"
+  },
+  "options_server_failed": {
+    "message": "サーバーの確認に失敗しました："
+  },
+  "options_cache_cleared_msg": {
+    "message": "キャッシュを消去しました。"
+  },
+  "options_cache_clear_err": {
+    "message": "失敗しました："
+  },
+  "options_counter_reset": {
+    "message": "カウンターをリセットしました。"
+  },
+  "options_counter_reset_err": {
+    "message": "リセットに失敗しました："
+  },
+  "options_detect_auto": {
+    "message": "自動検出"
+  },
+  "options_target_lang": {
+    "message": "翻訳先の言語"
+  },
+  "options_engine": {
+    "message": "エンジン"
+  },
+  "options_engine_label": {
+    "message": "OCR・翻訳エンジン"
+  },
+  "options_lara_key_id": {
+    "message": "Lara Access Key ID"
+  },
+  "options_lara_key_secret": {
+    "message": "Lara Access Key Secret"
+  },
+  "options_lara_model": {
+    "message": "文字除去モデル（画像エンジン専用）"
+  },
+  "options_lara_model_overlay": {
+    "message": "オーバーレイ：元の文字の上に描画し、元文字を残します"
+  },
+  "options_lara_model_inpainting": {
+    "message": "Inpainting：文字を除去し背景を修復（推奨）"
+  },
+  "options_lara_model_generative_fast": {
+    "message": "Generative fast：高速に再描画"
+  },
+  "options_lara_model_generative": {
+    "message": "Generative：最高品質で再描画"
+  }
+}
