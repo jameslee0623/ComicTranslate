@@ -17,9 +17,10 @@ if (typeof importScripts === 'function') {
     // are one level up. compat.js must come first: everything below assumes
     // `browser` exists, and on Chrome it does not until compat.js aliases it.
     importScripts('../shared/compat.js', '../shared/codec.js',
+                  '../shared/languages.js',
                   'settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js');
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -43,6 +44,88 @@ function serialize(task) {
   // Keep the chain alive even when a task throws.
   queue = run.then(() => undefined, () => undefined);
   return run;
+}
+
+// ── page-change cancellation ─────────────────────────────────────────────────
+/**
+ * A job whose page is gone is not worth finishing. Two things have to be stopped,
+ * and they need different mechanisms:
+ *
+ *   QUEUED jobs  - the content script posts one request per image, so a page of
+ *                  40 panels leaves a chain of them behind it. They are dropped
+ *                  by generation, not by abort: each request records the counters
+ *                  of the document that posted it, and a job that reaches the
+ *                  front of the queue after those moved returns "skipped" without
+ *                  a single byte going to the server.
+ *   RUNNING job  - the one in flight is aborted at the engine (see
+ *                  CTLensLocalEngine.cancelActive). On a local model that is the
+ *                  difference between stopping now and finishing a generation
+ *                  nobody will ever see, at the user's own expense - the reason
+ *                  this exists at all.
+ *
+ * Identity is the TAB plus the FRAME, in two counters, because the extension runs
+ * in every frame (all_frames: true):
+ *
+ *   tabGeneration    bumped when a new document loads in the tab. Invalidates
+ *                    every frame at once, which is what a real navigation means.
+ *   frameGeneration  bumped when ONE frame reports itself leaving (its own
+ *                    CT_CANCEL_TRANSLATE on pagehide). This is the precision that
+ *                    matters on ad-heavy readers: an advertising iframe reloading
+ *                    must not throw away the translations the main frame is in the
+ *                    middle of, which a tab-wide counter alone would do.
+ *
+ * A real page load is the only thing tabs.onUpdated reports as "loading", and it
+ * is never reported for a hash or history.pushState move - both keep the document,
+ * and therefore keep the content script that is still waiting for its reply.
+ */
+const tabGeneration = new Map();   // tabId -> counter
+const frameGeneration = new Map(); // 'tabId:frameId' -> counter
+let currentJob = null;             // {tabId, frameId} of the translation running now
+
+function frameKey(tabId, frameId) {
+  return tabId + ':' + (typeof frameId === 'number' ? frameId : 0);
+}
+
+/** Both halves of a document's identity, as one comparable token. */
+function generationFor(tabId, frameId) {
+  if (typeof tabId !== 'number') return '0:0';
+  return (tabGeneration.get(tabId) || 0) + ':' + (frameGeneration.get(frameKey(tabId, frameId)) || 0);
+}
+
+function bumpGeneration(tabId, frameId) {
+  if (typeof frameId === 'number') {
+    const key = frameKey(tabId, frameId);
+    frameGeneration.set(key, (frameGeneration.get(key) || 0) + 1);
+  } else {
+    tabGeneration.set(tabId, (tabGeneration.get(tabId) || 0) + 1);
+  }
+}
+
+/**
+ * Stop caring about a frame's (or a whole tab's) work: drop everything it queued
+ * and abort whatever it has in flight. Returns whether a live request was cut
+ * short.
+ *
+ * `frameId` omitted means the whole tab - that is what a navigation is. When it is
+ * given, only that frame's jobs are dropped and only its request is aborted.
+ *
+ * cancelActive() is a no-op for every other engine, so this can never cut a
+ * Google or Lara request short by mistake - and it does not need to. A Lens scan
+ * costs a few hundred milliseconds; a local generation costs real CPU for as long
+ * as it runs, which is what makes the asymmetry worth having.
+ */
+function cancelJobForTab(tabId, frameId) {
+  if (typeof tabId !== 'number') return false;
+  bumpGeneration(tabId, frameId);
+  if (!currentJob || currentJob.tabId !== tabId) return false;
+  if (typeof frameId === 'number' && currentJob.frameId !== frameId) return false;
+  if (typeof CTLensLocalEngine === 'undefined') return false;
+  const stopped = CTLensLocalEngine.cancelActive();
+  if (stopped) {
+    console.log('[CT] page changed in tab', tabId, 'frame', currentJob.frameId,
+                '- local request cancelled');
+  }
+  return stopped;
 }
 
 // ── toolbar "translating" animation ──────────────────────────────────────────
@@ -148,6 +231,18 @@ async function handle(msg, sender) {
       await CTCache.clear();
       return { cleared: true };
 
+    case 'CT_CANCEL_TRANSLATE': {
+      // The page is going away and said so itself. This is the earliest signal
+      // there can be - a bfcache navigation in particular may reach the listener
+      // below late, or not at all - so it is acted on directly. The frame id is
+      // passed so an iframe that is leaving drops only its own work.
+      return {
+        cancelled: cancelJobForTab(sender.tab ? sender.tab.id : msg.tabId,
+                                   typeof sender.frameId === 'number'
+                                     ? sender.frameId : msg.frameId)
+      };
+    }
+
     case 'CT_TRANSLATE_IMAGE': {
       if (!CTSettings.isAllowedOn(settings, sender.url || msg.url || '')) {
         return { skipped: true, reason: 'disabled for this page' };
@@ -156,22 +251,47 @@ async function handle(msg, sender) {
       const tabId = sender.tab ? sender.tab.id : msg.tabId;
       const frameId = typeof sender.frameId === 'number' ? sender.frameId : msg.frameId;
 
+      // The page this request belongs to, as of the moment it was posted.
+      const generation = generationFor(tabId, frameId);
+
       startSpin();
       let result;
       try {
-        result = await serialize(() =>
-          CTEngines.translateImage({
-            url: msg.url,
-            width: msg.width || 0,
-            height: msg.height || 0,
-            needBytes: !!msg.needBytes,
-            sourceLang: msg.sourceLang || settings.sourceLang,
-            targetLang: msg.targetLang || settings.targetLang,
-            settings,
-            tabId,
-            frameId
-          })
-        );
+        result = await serialize(async () => {
+          // The reader turned the page while this job waited its turn. Every
+          // remaining job in the chain is for a document that no longer exists,
+          // so returning early here is what drains the queue "immediately"
+          // instead of paying for 39 more OCR scans and 39 more generations.
+          if (generationFor(tabId, frameId) !== generation) {
+            return { skipped: true, reason: 'page changed' };
+          }
+          if (typeof tabId === 'number') {
+            currentJob = { tabId: tabId, frameId: frameId };
+          }
+          try {
+            return await CTEngines.translateImage({
+              url: msg.url,
+              width: msg.width || 0,
+              height: msg.height || 0,
+              needBytes: !!msg.needBytes,
+              sourceLang: msg.sourceLang || settings.sourceLang,
+              targetLang: msg.targetLang || settings.targetLang,
+              settings,
+              tabId,
+              frameId
+            });
+          } finally {
+            currentJob = null;
+          }
+        });
+      } catch (err) {
+        // An abort WE asked for is not a failure and must not be reported as one:
+        // the page that would have shown it is already gone, and the model was
+        // stopped on purpose. Anything else keeps its own error path.
+        if (err && err.cancelled) {
+          return { skipped: true, reason: 'page changed' };
+        }
+        throw err;
       } finally {
         stopSpin();
       }
@@ -190,6 +310,31 @@ async function handle(msg, sender) {
       CTLaraEngine.resetAuth();
       const bearer = await CTLaraEngine.ensureToken(settings);
       return { ok: true, expiresAt: CTLaraEngine.tokenExpiry(bearer) || 0 };
+    }
+
+    case 'CT_LOCAL_TEXT_PROBE': {
+      // Free connectivity check against the user's own server. It validates the
+      // URL shape and proves the server is alive WITHOUT sending an image or any
+      // OCR text: an empty `texts` array is the one request every implementation
+      // of the documented contract must answer, and any reply - 200, or an error
+      // status for the empty body - proves the server is up and listening.
+      const endpoint = CTLensLocalEngine.requireEndpoint(settings);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: [], target: 'en' }),
+          signal: ctrl.signal
+        });
+        return { ok: true, status: res.status };
+      } catch (e) {
+        throw new Error('Cannot reach the local server at ' + endpoint +
+          ' (' + (e && e.name === 'AbortError' ? 'timed out' : 'is it running?') + ').');
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     default:
@@ -231,5 +376,40 @@ browser.runtime.onInstalled.addListener((details) => {
     })
     .catch((e) => console.error('[CT] startup maintenance failed', e));
   console.log('[CT] installed/updated', details.reason);
+});
+
+/**
+ * The reader turned the page: stop paying for the page they left.
+ *
+ * "loading" is the whole filter, and it is deliberate. tabs.onUpdated reports it
+ * when a NEW document starts in the tab, so it fires once per real navigation and
+ * never for a hash change or a pushState move - both of which keep the document,
+ * and therefore keep the content script that is still waiting for its reply. Those
+ * must not be cancelled. A frame loading on its own does not touch the tab's
+ * status, so an embedded reader that swaps its own frames is not caught here; it
+ * is caught by that frame's own CT_CANCEL_TRANSLATE instead, which is also why the
+ * frame id is carried through every job.
+ */
+browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo || changeInfo.status !== 'loading') return;
+  cancelJobForTab(tabId);   // no frame id: a tab document load invalidates them all
+});
+
+/**
+ * Closing a tab is the same event with no page left to read the reply, plus one
+ * loose end: the counters would otherwise sit in the maps for a tab id that no
+ * longer exists. Chrome reuses ids, and a reused id must start clean - otherwise a
+ * fresh tab could inherit a stale counter and have its first translation dropped
+ * as "page changed".
+ */
+browser.tabs.onRemoved.addListener((tabId) => {
+  if (currentJob && currentJob.tabId === tabId &&
+      typeof CTLensLocalEngine !== 'undefined') {
+    CTLensLocalEngine.cancelActive();
+  }
+  tabGeneration.delete(tabId);
+  for (const key of Array.from(frameGeneration.keys())) {
+    if (key.indexOf(tabId + ':') === 0) frameGeneration.delete(key);
+  }
 });
 

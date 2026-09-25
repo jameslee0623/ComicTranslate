@@ -18,6 +18,10 @@
 var noop = function () {};
 
 globalThis.window = globalThis;
+// window IS globalThis here, so the listeners a module registers on the window
+// (pagehide, for instance) have to exist on the global object.
+globalThis.addEventListener = noop;
+globalThis.removeEventListener = noop;
 globalThis.location = { href: 'https://example.test/page' };
 globalThis.navigator = { userAgent: 'jsc-smoke-test' };
 // Real browsers always define console; the smoke harness must too, or any
@@ -34,6 +38,10 @@ globalThis.MutationObserver = function () { this.observe = noop; this.disconnect
 globalThis.ResizeObserver = function () { this.observe = noop; this.disconnect = noop; };
 globalThis.Image = function () {};
 globalThis.btoa = function () { return ''; };
+globalThis.atob = function (s) { return ''; };
+globalThis.FormData = function () { this.append = noop; };
+globalThis.Blob = function () {};
+globalThis.AbortController = function () { this.signal = {}; this.abort = noop; };
 if (!globalThis.URL) globalThis.URL = function () {};
 if (!globalThis.URL.createObjectURL) globalThis.URL.createObjectURL = function () { return 'blob:x'; };
 if (!globalThis.URL.revokeObjectURL) globalThis.URL.revokeObjectURL = noop;
@@ -75,14 +83,15 @@ globalThis.browser = {
     query: function () { return Promise.resolve([]); },
     sendMessage: function () { return Promise.resolve({}); },
     remove: function () { return Promise.resolve(); },
-    onUpdated: { addListener: noop, removeListener: noop }
+    onUpdated: { addListener: noop, removeListener: noop },
+    onRemoved: { addListener: noop, removeListener: noop }
   }
 };
 
-var SHARED = ['compat.js', 'codec.js'];
+var SHARED = ['compat.js', 'codec.js', 'languages.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'engines.js', 'background.js'];
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -132,6 +141,11 @@ var EXPECTED = {
                 'rescaleRegions', 'boxToPixels', 'collectWordsDeep'],
   CTLensEngine: ['imageToRegions', 'toUploadable', 'log'],
   CTLensLaraEngine: ['imageToRegions', 'log'],
+  CTLensLocalEngine: ['requireEndpoint', 'parseReply', 'variantKey',
+                      'languageLabel', 'buildInstruction', 'extractJsonArray',
+                      'normalizeTranslations', 'imageToRegions', 'log',
+                      'reasoningText', 'cancelActive', 'unwrapAssistantText',
+                      'parseBody'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'isQuotaError',
                  'imageToRegions'],

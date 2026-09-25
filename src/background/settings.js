@@ -91,6 +91,14 @@ if (typeof globalThis.CTSettings === 'undefined') {
      */
     laraAccessKeyId: '',
     laraAccessKeySecret: '',
+    /**
+     * Local AI server (lens-local engine): text in, translations out. Empty =
+     * engine unavailable. Only OCR'd strings ever travel here - never an image.
+     */
+    localTextUrl: '',
+    /** Optional bearer token, sent only to the user's own URL above. */
+    localTextApiKey: '',
+
     /** Text-removal model: overlay | inpainting | generative | generative_fast. */
     laraModel: 'inpainting',
 

@@ -22,6 +22,7 @@
     "scripts": [
       "src/shared/compat.js",
       "src/shared/codec.js",
+      "src/shared/languages.js",
       "src/background/settings.js",
       "src/background/usage.js",
       "src/background/cache.js",
@@ -32,6 +33,7 @@
       "src/background/lensEngine.js",
       "src/background/laraEngine.js",
       "src/background/lensLaraEngine.js",
+      "src/background/lensLocalEngine.js",
       "src/background/engines.js",
       "src/background/background.js"
     ]

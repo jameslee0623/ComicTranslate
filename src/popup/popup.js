@@ -128,7 +128,10 @@ function fillEngines(selected) {
     'lens-lara': 'Official API, text only, billed per character sent (a page is ' +
                  'usually 500-1,500). Needs credentials in Settings.',
     lens: 'No API key required. Undocumented Google endpoint that can change ' +
-          'without notice.'
+          'without notice.',
+    'lens-local': 'Lens finds the text for free; only those strings go to your ' +
+          'own local server, which returns the translation. No quota. Enter its ' +
+          'URL in Settings.'
   };
   els.engineNote.textContent = current
     ? (NOTES[current.id] || (current.needsKey

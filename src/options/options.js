@@ -11,7 +11,8 @@ const FIELDS = [
   'sourceLang', 'targetLang', 'engineId', 'fontFamily',
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
-  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap'
+  'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap',
+  'localTextUrl', 'localTextApiKey'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -71,11 +72,18 @@ function fillEngines(engines, selected) {
             'covers roughly 10-20 pages. Same Lara credentials below.'
           : current.needsKey
             ? 'This engine needs an API key before it will work.'
-            : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
-              'without notice.')
+            : current.id === 'lens-local'
+              ? 'Google Lens finds the text boxes and reads the characters for ' +
+                'free; only those strings are POSTed to the server URL below ' +
+                '(your machine only) to be translated, and the result is drawn ' +
+                'onto the page exactly like the free engine. Enter the URL, then ' +
+                'use "Test local server".'
+              : 'No API key needed. Uses an undocumented Google endpoint that can change ' +
+                'without notice.')
     : '';
   el('lara-fields').hidden = !(current &&
     (current.id === 'lara' || current.id === 'lens-lara'));
+  el('lens-local-fields').hidden = !(current && current.id === 'lens-local');
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */
@@ -115,6 +123,8 @@ async function load() {
   el('laraAccessKeySecret').value = s.laraAccessKeySecret || '';
   el('laraModel').value = s.laraModel || 'inpainting';
   el('laraMonthlyCap').value = s.laraMonthlyCap || 10000;
+  el('localTextUrl').value = s.localTextUrl || '';
+  el('localTextApiKey').value = s.localTextApiKey || '';
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
   renderUsage();
 }
@@ -186,6 +196,32 @@ el('lara-probe').addEventListener('click', async () => {
     const data = await bg('CT_LARA_PROBE');
     const when = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'unknown';
     note.textContent = 'Credentials accepted. Token expires ' + when + '.';
+  } catch (e) {
+    note.textContent = 'Failed: ' + e.message;
+  }
+});
+
+el('engineId').addEventListener('change', () => {
+  // Re-render the engine note + field visibility without waiting for a reload:
+  // the select already holds the new id, so rebuild from the last-known list.
+  save({ engineId: el('engineId').value }).then((s) => {
+    bg('CT_GET_SETTINGS').then((data) => fillEngines(data.engines, s.engineId))
+      .catch(() => {});
+  });
+});
+
+el('lens-local-probe').addEventListener('click', async () => {
+  const note = el('lens-local-probe-result');
+  note.textContent = 'Checking…';
+  try {
+    // Save first: the probe talks to whatever URL is in the field now. It sends
+    // no page text - only an empty request that proves the server is listening.
+    await save({ localTextUrl: el('localTextUrl').value.trim() });
+    const data = await bg('CT_LOCAL_TEXT_PROBE');
+    note.textContent = data.status === 404 || data.status === 405
+      ? 'Server is reachable (HTTP ' + data.status + ') — it does not accept ' +
+        'POST on this path; check the URL and the method.'
+      : 'Server is reachable (HTTP ' + data.status + ').';
   } catch (e) {
     note.textContent = 'Failed: ' + e.message;
   }
