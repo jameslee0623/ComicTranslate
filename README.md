@@ -552,7 +552,7 @@ unhelpful generic one.
 ./tools/verify.sh
 ```
 
-Seven stages, all runnable without Node or a browser:
+Eight stages, all runnable without Node or a browser:
 
 1. **Syntax** — every JS file is parsed with JavaScriptCore (`jsc`).
 2. **Load** — every module is actually *evaluated* against stubbed browser
@@ -563,16 +563,21 @@ Seven stages, all runnable without Node or a browser:
 4. **Lara** — unit tests over the engine's string plumbing with stubbed
    WebCrypto/fetch: the HMAC challenge vector, the truncated `Content-MD5`
    digest, token expiry maths, multipart assembly and the 401 re-auth path.
-5. **Semantic** — manifest paths exist, every element id the UI scripts touch
+5. **Background** — page-change cancellation and queue draining: a navigation
+   aborts the request in flight, the aborted and queued jobs report `skipped`
+   (not `failed`), a frame that does not own the job cancels nothing, and
+   closing the tab aborts its running request with a reused tab id starting
+   clean.
+6. **Semantic** — manifest paths exist, every element id the UI scripts touch
    exists in the HTML, every settings key the UI writes exists in `DEFAULTS`,
    and every `CT*` method called cross-module is actually exported.
-6. **Browser** — the cross-browser guards: `CTCodec` pack/unpack survives a
+7. **Browser** — the cross-browser guards: `CTCodec` pack/unpack survives a
    real JSON round trip (the Chrome channel), the base64 chunking handles
    0x8000 boundaries, the **unpacked control proves bytes are lost through
    JSON** (the regression the codec exists to prevent), and `CTCompat` aliases
    a Chrome-shaped environment correctly in background, content and page
    contexts.
-7. **Privacy** — values declared in the gitignored `tools/local_only.txt`
+8. **Privacy** — values declared in the gitignored `tools/local_only.txt`
    (local-only test values) must never appear on any ref already pushed to
    origin. The guard file itself is untracked, so the pushed repo carries no
    trace of what it protects; the stage fails the moment one of the values
@@ -599,8 +604,9 @@ and reported `"no content-script reply from result tab"`.
 | Semantic | passed — it had a `continue` for namespaces it could not enumerate statically |
 
 Three of four checks missed it. The lesson is that static analysis needs a
-counterpart that actually *runs* the module's top level. (The list above is now
-five stages — stage 4 covers the Lara engine.)
+counterpart that actually *runs* the module's top level. (That list has since
+grown to eight stages — stage 4 covers the Lara engine and stage 5 the
+background job queue.)
 
 `verify.sh` proves the code is self-consistent. It does **not** prove the
 extension works in Firefox — only translating a real page does that

@@ -36,7 +36,18 @@ esac
 
 TMP=$(mktemp -d /tmp/ct-smoke.XXXXXX)
 [ "${KEEP:-0}" = 1 ] && echo "smoke: artifacts kept in $TMP"
-trap '[ "${KEEP:-0}" = 1 ] || { kill $SRV 2>/dev/null; rm -rf "$TMP"; }' EXIT
+# Cleanup must cover the signals a real run actually dies from. `EXIT` alone is
+# not enough: `sh` does NOT run the EXIT trap on SIGTERM/SIGHUP, and killing the
+# script (or closing the terminal that launched it) then leaks a live
+# http.server process and the whole $TMP tree - which is exactly how earlier
+# runs left orphans behind (see the port comment below).
+cleanup() {
+  if [ "${KEEP:-0}" = 1 ]; then return; fi
+  [ -n "${SRV:-}" ] && kill "$SRV" 2>/dev/null
+  [ -n "${CHROME_PID:-}" ] && kill "$CHROME_PID" 2>/dev/null
+  rm -rf "$TMP"
+}
+trap cleanup EXIT INT TERM HUP
 
 # Fixture: a page with one large PNG (>= minImageSize) so the scanner sees it.
 # The page flips document.title to CT_LOADED once the content script's
