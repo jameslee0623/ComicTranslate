@@ -91,7 +91,8 @@ globalThis.browser = {
 var SHARED = ['compat.js', 'codec.js', 'languages.js', 'i18n.js'];
 var BACKGROUND = ['settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js', 'background.js'];
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js',
+                  'lensAzureEngine.js', 'engines.js', 'background.js'];
 var CONTENT = ['textLayout.js', 'painter.js', 'imageScanner.js', 'replaceImage.js',
                'content.js'];
 
@@ -146,6 +147,9 @@ var EXPECTED = {
                       'normalizeTranslations', 'imageToRegions', 'log',
                       'reasoningText', 'cancelActive', 'unwrapAssistantText',
                       'parseBody'],
+  CTLensAzureEngine: ['toAzureCode', 'fromAzureCode', 'requireCredentials', 'isQuotaError',
+                      'planBatches', 'parseReply', 'translateTexts', 'variantKey',
+                      'imageToRegions', 'log'],
   CTLaraEngine: ['authChallenge', 'tokenExpiry', 'tokenIsExpired', 'requireCredentials',
                  'ensureToken', 'imageFormFields', 'extFromMime', 'isQuotaError',
                  'imageToRegions'],

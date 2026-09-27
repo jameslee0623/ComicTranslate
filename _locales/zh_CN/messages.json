@@ -58,6 +58,7 @@
   "engine_lens_lara": { "message": "Lens + Lara 文本" },
   "engine_lens": { "message": "Google Lens（免费）" },
   "engine_lens_local": { "message": "Lens OCR + 自有本地 AI" },
+  "engine_lens_azure": { "message": "Lens OCR（免费）+ 微软翻译" },
 
 
   "popup_summary_prefix": { "message": "当前页面：已翻译 " },
@@ -71,6 +72,7 @@
   "engine_note_lens_lara": { "message": "官方 API 纯文本模式，按实际发送字符计费（通常每页约 500–1,500 字符）。请在设置中输入凭据。" },
   "engine_note_lens": { "message": "无需 API 密钥。使用 Google 未公开端点，可能随时变动。" },
   "engine_note_lens_local": { "message": "免费使用 Google Lens 进行 OCR 文字识别，仅将识别后的字符串发送至本地 AI 服务器翻译。无额度限制，请在设置中配置 URL。" },
+  "engine_note_lens_azure": { "message": "官方 API，提供长期免费额度：每月 200 万字符（约 1,300 页），按月重置。额度用尽后服务会停止，因此除非把资源升级为付费层，否则不会产生费用。需在设置中填写密钥与区域。" },
   "engine_note_needs_key": { "message": "需要 API 密钥（请在设置页面中配置）。" },
   "engine_note_none_needed": { "message": "无需 API 密钥。" },
 
@@ -98,6 +100,13 @@
   "options_local_help_1": { "message": "Google Lens 免费定位文字框并完成 OCR 识别，仅提取出的文字行会 POST 给您指定的本地服务器，服务器返回对应翻译数组。翻译结果将直接绘制回原图上。纯主机名:端口格式会自动映射至 OpenAI 兼容的 Chat 路由 (/v1/chat/completions)，兼容 LM Studio、Ollama、vLLM 与 llama.cpp；若为其他路由请写全完整 URL。原图完全保留在浏览器内，绝不外发。" },
   "options_local_help_2": { "message": "若在 LM Studio 中使用思考型推理模型 (Reasoning Model)，请在其 Developer Settings 中关闭“Separate reasoning_content and content in API responses”。若开启，模型可能会将答案全部写在 reasoning 字段导致 content 为空。此外推理模型较慢，推荐选用轻量级 Instruct 模型体验更佳。切换到其他页面时会自动中止正在进行的翻译请求，立即释放本地算力。" },
   "options_test_local": { "message": "测试本地服务器" },
+  "options_azure_key": { "message": "微软翻译密钥" },
+  "options_azure_key_placeholder": { "message": "资源中的密钥 1 或密钥 2" },
+  "options_azure_region": { "message": "资源区域" },
+  "options_azure_region_placeholder": { "message": "例如 global、westus2、japaneast" },
+  "options_azure_help": { "message": "免费（F0）层每月可翻译 200 万字符——约 1,300 页漫画——并按月重置。额度用尽后服务会停止到下一个月，因此除非把资源升级为付费层，否则不会产生任何费用。Google Lens 仍免费负责定位与识别文字，只有识别出的字符串会发送给微软。两项均需填写：请从资源的“密钥和终结点”页面复制密钥与区域——多服务资源请填写 global。密钥与区域不匹配是导致 401 的最常见原因。" },
+  "options_test_azure": { "message": "测试微软密钥" },
+  "options_azure_creds_valid": { "message": "密钥有效——该资源可以翻译。" },
   "options_rendering": { "message": "排版与渲染" },
   "options_font_family": { "message": "字体名称（留空使用内置字体库）" },
   "options_font_family_placeholder": { "message": "例如：Comic Neue, sans-serif" },

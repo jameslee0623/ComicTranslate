@@ -12,7 +12,8 @@ const FIELDS = [
   'minImageSize', 'maxImagesPerPage', 'requestDelayMs',
   'cacheTtlDays', 'domainMode',
   'laraAccessKeyId', 'laraAccessKeySecret', 'laraModel', 'laraMonthlyCap',
-  'localTextUrl', 'localTextApiKey'
+  'localTextUrl', 'localTextApiKey',
+  'azureKey', 'azureRegion'
 ];
 const CHECKBOXES = ['textStroke', 'scanBackgrounds', 'debug'];
 
@@ -82,12 +83,14 @@ function fillEngines(engines, selected) {
     current.id === 'lara' ? 'engine_note_lara' :
     current.id === 'lens-lara' ? 'engine_note_lens_lara' :
     current.id === 'lens-local' ? 'engine_note_lens_local' :
+    current.id === 'lens-azure' ? 'engine_note_lens_azure' :
     current.needsKey ? 'engine_note_needs_key' : 'engine_note_none_needed'
   );
   el('engine-note').textContent = noteKey ? t(noteKey) : '';
   el('lara-fields').hidden = !(current &&
     (current.id === 'lara' || current.id === 'lens-lara'));
   el('lens-local-fields').hidden = !(current && current.id === 'lens-local');
+  el('azure-fields').hidden = !(current && current.id === 'lens-azure');
 }
 
 /** Push new settings to every open tab so behaviour updates immediately. */
@@ -140,6 +143,8 @@ async function load() {
   el('laraMonthlyCap').value = s.laraMonthlyCap || 10000;
   el('localTextUrl').value = s.localTextUrl || '';
   el('localTextApiKey').value = s.localTextApiKey || '';
+  el('azureKey').value = s.azureKey || '';
+  el('azureRegion').value = s.azureRegion || '';
   for (const key of CHECKBOXES) el(key).checked = !!s[key];
   renderUsage();
 }
@@ -249,6 +254,24 @@ el('lens-local-probe').addEventListener('click', async () => {
     }
   } catch (e) {
     note.textContent = t('options_server_failed') + e.message;
+  }
+});
+
+el('azure-probe').addEventListener('click', async () => {
+  const note = el('azure-probe-result');
+  note.textContent = t('options_testing_creds');
+  try {
+    // Save first: the probe authenticates with whatever is in the fields now.
+    // It costs one character of the month's allowance, and it is the only way
+    // to prove the KEY and the REGION belong to the same resource.
+    await save({
+      azureKey: el('azureKey').value.trim(),
+      azureRegion: el('azureRegion').value.trim()
+    });
+    await bg('CT_AZURE_PROBE');
+    note.textContent = t('options_azure_creds_valid');
+  } catch (e) {
+    note.textContent = t('options_creds_invalid') + e.message;
   }
 });
 

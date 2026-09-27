@@ -58,6 +58,7 @@
   "engine_lens_lara": { "message": "Lens + Lara text" },
   "engine_lens": { "message": "Google Lens (free)" },
   "engine_lens_local": { "message": "Lens OCR + your own local AI" },
+  "engine_lens_azure": { "message": "Lens OCR (free) + Microsoft Translator" },
 
 
   "popup_summary_prefix": { "message": "On this page: " },
@@ -71,6 +72,7 @@
   "engine_note_lens_lara": { "message": "Official API, text only, billed per character sent (a page is usually 500-1,500). Needs credentials in Settings." },
   "engine_note_lens": { "message": "No API key required. Undocumented Google endpoint that can change without notice." },
   "engine_note_lens_local": { "message": "Lens finds the text for free; only those strings go to your own local server, which returns the translation. No quota. Enter its URL in Settings." },
+  "engine_note_lens_azure": { "message": "Official API with a standing free tier: 2,000,000 characters a month, about 1,300 pages, renewing every month. The service stops when the allowance is spent, so nothing can be billed unless you move the resource to a paid tier. Needs a key and its region in Settings." },
   "engine_note_needs_key": { "message": "Requires an API key (see Settings)." },
   "engine_note_none_needed": { "message": "No API key required." },
 
@@ -98,6 +100,13 @@
   "options_local_help_1": { "message": "Google Lens finds the boxes and reads the text for free; only those strings are POSTed to your own server, which answers with the translations index-aligned with the input. The reply is drawn onto the page exactly like the free engine does it. A bare host:port is treated as an OpenAI-compatible chat server (/v1/chat/completions), which is what LM Studio, Ollama, vLLM and llama.cpp expose by default; give the full path for anything else. The page image never leaves the browser." },
   "options_local_help_2": { "message": "Using LM Studio with a reasoning model? Turn OFF Separate reasoning_content and content in API responses in its Developer Settings. With it on, a model can put its entire answer in the reasoning field and leave the answer itself empty, and there is then nothing to draw on the page. Reasoning models are also slow — a 12B model spent nearly two minutes on three short lines while testing — so a small instruct model gives a far better experience. Switching to another page cancels a translation that is still running, so the model stops immediately instead of finishing work for the page you just left." },
   "options_test_local": { "message": "Test local server" },
+  "options_azure_key": { "message": "Microsoft Translator key" },
+  "options_azure_key_placeholder": { "message": "key 1 or key 2 from your Translator resource" },
+  "options_azure_region": { "message": "Resource region" },
+  "options_azure_region_placeholder": { "message": "e.g. global, westus2, japaneast" },
+  "options_azure_help": { "message": "The free (F0) tier translates 2,000,000 characters a month — about 1,300 manga pages — and renews every month. When the allowance is spent the service stops until the next month, so nothing is billed unless you move the resource to a paid tier. Google Lens still finds the text for free, so only the detected strings are sent to Microsoft. Both fields are required: copy the key and the region from the resource's Keys and Endpoint page — use global for a multi-service resource. A key paired with the wrong region is the most common cause of a 401." },
+  "options_test_azure": { "message": "Test Microsoft key" },
+  "options_azure_creds_valid": { "message": "Key accepted — this resource can translate." },
   "options_rendering": { "message": "Rendering" },
   "options_font_family": { "message": "Font family (blank = built-in stack)" },
   "options_font_family_placeholder": { "message": "e.g. Comic Neue, sans-serif" },

@@ -58,6 +58,7 @@
   "engine_lens_lara": { "message": "Lens + Lara 文字" },
   "engine_lens": { "message": "Google Lens（免費）" },
   "engine_lens_local": { "message": "Lens OCR + 自有本機 AI" },
+  "engine_lens_azure": { "message": "Lens OCR（免費）+ 微軟翻譯" },
 
 
   "popup_summary_prefix": { "message": "此頁面：已翻譯 " },
@@ -71,6 +72,7 @@
   "engine_note_lens_lara": { "message": "官方 API 純文字模式，依實際發送字元計費（通常每頁約 500–1,500 字元）。請在設定中填寫憑證。" },
   "engine_note_lens": { "message": "無需 API 金鑰。使用 Google 未公開端點，可能隨時調整。" },
   "engine_note_lens_local": { "message": "免費使用 Google Lens 進行 OCR 文字辨識，僅辨識出的字串會發送至您自己的本機伺服器翻譯。無配額限制，請在設定中輸入 URL。" },
+  "engine_note_lens_azure": { "message": "官方 API，提供長期免費額度：每月 200 萬字元（約 1,300 頁），按月重置。額度用盡後服務會停止，因此除非將資源升級為付費層，否則不會產生費用。需在設定中填寫金鑰與區域。" },
   "engine_note_needs_key": { "message": "需要 API 金鑰（請至設定頁面設定）。" },
   "engine_note_none_needed": { "message": "無需 API 金鑰。" },
 
@@ -98,6 +100,13 @@
   "options_local_help_1": { "message": "Google Lens 免費取得文字框位置並辨識字串，僅這些文字會 POST 到您指定的本機伺服器，伺服器依序傳回翻譯陣列。翻譯結果會以原版風格繪製在頁面上。僅填寫 host:port 時，會自動對應至 OpenAI 相容的 Chat 路由 (/v1/chat/completions)，相容於 LM Studio、Ollama、vLLM、llama.cpp 等工具；若使用其他路徑請填寫完整 URL。頁面圖片完全不離開瀏覽器。" },
   "options_local_help_2": { "message": "若在 LM Studio 中搭配思考型模型 (Reasoning Model)，請在 Developer Settings 中關閉「Separate reasoning_content and content in API responses」。若開啟，模型可能會將完整回覆放在 reasoning 欄位而讓 content 為空。此外思考型模型反應較慢，建議選擇小型 Instruct 指令模型體驗較佳。跳轉至其他分頁時會自動取消進行中的翻譯請求，立即停止後端運算。" },
   "options_test_local": { "message": "測試本機伺服器" },
+  "options_azure_key": { "message": "微軟翻譯金鑰" },
+  "options_azure_key_placeholder": { "message": "資源中的金鑰 1 或金鑰 2" },
+  "options_azure_region": { "message": "資源區域" },
+  "options_azure_region_placeholder": { "message": "例如 global、westus2、japaneast" },
+  "options_azure_help": { "message": "免費（F0）層每月可翻譯 200 萬字元——約 1,300 頁漫畫——並按月重置。額度用盡後服務會停止到下一個月，因此除非將資源升級為付費層，否則不會產生任何費用。Google Lens 仍免費負責定位與辨識文字，只有辨識出的字串會傳送給微軟。兩項皆須填寫：請從資源的「金鑰與端點」頁面複製金鑰與區域——多服務資源請填 global。金鑰與區域不相符是導致 401 的最常見原因。" },
+  "options_test_azure": { "message": "測試微軟金鑰" },
+  "options_azure_creds_valid": { "message": "金鑰有效——此資源可以翻譯。" },
   "options_rendering": { "message": "繪製與顯示" },
   "options_font_family": { "message": "字型名稱（留空使用內建字型庫）" },
   "options_font_family_placeholder": { "message": "例如：Comic Neue, sans-serif" },

@@ -9,7 +9,7 @@
 #   1. every JS file parses            (JavaScriptCore's parser, via jsc)
 #   2. every module loads and exports   (stubbed browser globals)
 #   3. the pure content logic passes    (via jsc)
-#   4. the Lara engine logic passes     (via jsc)
+#   4. the engine logic passes          (Lara, lens-local, Azure; via jsc)
 #   5. background routing passes        (cancellation, queue draining)
 #   6. cross-file references resolve    (manifest paths, element ids, exports)
 #   7. Firefox AND Chrome compatibility (namespace shim, byte transport)
@@ -46,6 +46,7 @@ files += [os.path.abspath('tools/check_syntax.js'),
           os.path.abspath('tools/test_load.js'),
           os.path.abspath('tools/test_pure.js'),
           os.path.abspath('tools/test_lara.js'),
+          os.path.abspath('tools/test_azure.js'),
           os.path.abspath('tools/test_background.js'),
           os.path.abspath('tools/test_codec.js'),
           os.path.abspath('tools/test_compat.js')]
@@ -70,8 +71,13 @@ if ! "$JSC" tools/test_pure.js; then
 fi
 
 echo
-echo "== 4/8 lara: engine auth + request unit tests =="
+echo "== 4/8 engines: auth + request unit tests =="
+echo "   (lara: HMAC vector, truncated digest, token lifecycle, multipart)"
+echo "   (lens-local: request families, reply parsing; azure: Microsoft Translator)"
 if ! "$JSC" tools/test_lara.js; then
+  failures=$((failures + 1))
+fi
+if ! "$JSC" tools/test_azure.js; then
   failures=$((failures + 1))
 fi
 

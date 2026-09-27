@@ -145,6 +145,9 @@
   "engine_lens_local": {
     "message": "Lens OCR + 自分のローカル AI"
   },
+  "engine_lens_azure": {
+    "message": "Lens OCR（無料）+ Microsoft Translator"
+  },
   "popup_summary_prefix": {
     "message": "On this page: "
   },
@@ -174,6 +177,9 @@
   },
   "engine_note_lens_local": {
     "message": "Lensが無料で文字を読み取り、抽出した文字列だけを自分のローカルサーバーへ送ります。設定でURLを入力してください。"
+  },
+  "engine_note_lens_azure": {
+    "message": "公式 API。無料枠が常設で、月 200 万文字（およそ 1,300 ページ分）、毎月リセットされます。使い切るとサービスが停止するため、有料層に変更しない限り課金されません。設定でキーとリージョンの入力が必要です。"
   },
   "engine_note_needs_key": {
     "message": "APIキーが必要です（設定）。"
@@ -252,6 +258,27 @@
   },
   "options_test_local": {
     "message": "ローカルサーバーをテスト"
+  },
+  "options_azure_key": {
+    "message": "Microsoft Translator キー"
+  },
+  "options_azure_key_placeholder": {
+    "message": "リソースのキー 1 またはキー 2"
+  },
+  "options_azure_region": {
+    "message": "リソースのリージョン"
+  },
+  "options_azure_region_placeholder": {
+    "message": "例: global, westus2, japaneast"
+  },
+  "options_azure_help": {
+    "message": "無料（F0）層では月 200 万文字（漫画およそ 1,300 ページ分）を翻訳でき、毎月リセットされます。使い切ると翌月までサービスが停止するため、有料層に変更しない限り課金されません。文字の検出は Google Lens が無料で行うため、Microsoft に送られるのは認識された文字列だけです。両方の入力が必須です。キーとリージョンはリソースの「キーとエンドポイント」ページからコピーしてください（マルチサービス リソースは global）。キーとリージョンの不一致は 401 の最も一般的な原因です。"
+  },
+  "options_test_azure": {
+    "message": "Microsoft キーをテスト"
+  },
+  "options_azure_creds_valid": {
+    "message": "キーは有効です。このリソースで翻訳できます。"
   },
   "options_rendering": {
     "message": "描画"

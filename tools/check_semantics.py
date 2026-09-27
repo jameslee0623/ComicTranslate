@@ -62,7 +62,7 @@ for key in ["renderMode", "scanBackgrounds", "textStroke", "fontFamily", "minIma
             "maxImagesPerPage", "requestDelayMs", "cacheTtlDays", "domainMode", "domains",
             "debug", "engineId", "sourceLang", "targetLang", "uiLanguage", "enabled",
             "laraAccessKeyId", "laraAccessKeySecret", "laraModel", "laraMonthlyCap",
-            "localTextUrl", "localTextApiKey"]:
+            "localTextUrl", "localTextApiKey", "azureKey", "azureRegion"]:
     if not re.search(r"\b" + key + r"\s*:", settings_src):
         fail("settings.js DEFAULTS is missing key: " + key)
 
