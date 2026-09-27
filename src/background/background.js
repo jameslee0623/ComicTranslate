@@ -20,7 +20,8 @@ if (typeof importScripts === 'function') {
                   '../shared/languages.js',
                   'settings.js', 'usage.js', 'cache.js', 'imageFetch.js',
                   'translator.js', 'protobuf.js', 'lensProto.js', 'lensEngine.js',
-                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js', 'engines.js');
+                  'laraEngine.js', 'lensLaraEngine.js', 'lensLocalEngine.js',
+                  'lensAzureEngine.js', 'engines.js');
   } catch (e) {
     console.error('[CT] importScripts failed', e);
   }
@@ -335,6 +336,15 @@ async function handle(msg, sender) {
       } finally {
         clearTimeout(timer);
       }
+    }
+
+    case 'CT_AZURE_PROBE': {
+      // Credential check. Unlike Lara's probe there is no free auth call to
+      // lean on: /translate is the only endpoint that validates the key AND
+      // the region, so this is the honest test. It costs ONE character of the
+      // month's 2,000,000 on the free (F0) tier.
+      const probe = await CTLensAzureEngine.translateTexts(['a'], 'en', 'es', settings);
+      return { ok: true, sample: probe[0] || '' };
     }
 
     default:

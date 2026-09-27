@@ -145,6 +145,9 @@
   "engine_lens_local": {
     "message": "Lens OCR + 내 로컬 AI"
   },
+  "engine_lens_azure": {
+    "message": "Lens OCR(무료) + Microsoft Translator"
+  },
   "popup_summary_prefix": {
     "message": "On this page: "
   },
@@ -174,6 +177,9 @@
   },
   "engine_note_lens_local": {
     "message": "Lens가 글자를 무료로 읽고 추출한 문자열만 내 로컬 서버로 보냅니다. 설정에서 URL을 입력하세요."
+  },
+  "engine_note_lens_azure": {
+    "message": "공식 API로 상시 무료 한도가 있습니다: 월 200만 자(약 1,300페이지), 매월 초기화됩니다. 한도를 모두 쓰면 서비스가 중단되므로 유료 등급으로 변경하지 않는 한 요금이 부과되지 않습니다. 설정에 키와 리전이 필요합니다."
   },
   "engine_note_needs_key": {
     "message": "API 키가 필요합니다(설정)."
@@ -252,6 +258,27 @@
   },
   "options_test_local": {
     "message": "로컬 서버 테스트"
+  },
+  "options_azure_key": {
+    "message": "Microsoft Translator 키"
+  },
+  "options_azure_key_placeholder": {
+    "message": "리소스의 키 1 또는 키 2"
+  },
+  "options_azure_region": {
+    "message": "리소스 지역"
+  },
+  "options_azure_region_placeholder": {
+    "message": "예: global, westus2, japaneast"
+  },
+  "options_azure_help": {
+    "message": "무료(F0) 등급은 월 200만 자(만화 약 1,300페이지)를 번역할 수 있으며 매월 초기화됩니다. 한도를 모두 쓰면 다음 달까지 서비스가 중단되므로 유료 등급으로 변경하지 않는 한 요금이 부과되지 않습니다. 텍스트 탐지는 Google Lens가 무료로 처리하므로 인식된 문자열만 Microsoft로 전송됩니다. 두 항목 모두 필수입니다: 리소스의 '키 및 엔드포인트' 페이지에서 키와 지역을 복사하세요(다중 서비스 리소스는 global). 키와 지역이 서로 맞지 않는 것이 401의 가장 흔한 원인입니다."
+  },
+  "options_test_azure": {
+    "message": "Microsoft 키 테스트"
+  },
+  "options_azure_creds_valid": {
+    "message": "키가 확인되었습니다. 이 리소스로 번역할 수 있습니다."
   },
   "options_rendering": {
     "message": "렌더링"

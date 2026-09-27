@@ -139,7 +139,8 @@ function fillEngines(selected) {
     lara: 'engine_note_lara',
     'lens-lara': 'engine_note_lens_lara',
     lens: 'engine_note_lens',
-    'lens-local': 'engine_note_lens_local'
+    'lens-local': 'engine_note_lens_local',
+    'lens-azure': 'engine_note_lens_azure'
   };
   els.engineNote.textContent = current
     ? t(NOTES[current.id] || (current.needsKey

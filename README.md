@@ -73,6 +73,7 @@ you want translated and press **Add this site** — that's it.
 | **Lens OCR + your own local AI** | free (your own hardware) | no — your own server | Google's OCR boxes, your local model's translation, typeset locally |
 | **Lens + Lara text** | billed per character actually sent | yes — Lara free tier | Google's OCR boxes, Lara's translation quality |
 | **Lara image (official)** | flat 10,000 characters per image | yes — Lara | Lara's server renders the whole translated image; best visual quality |
+| **Lens OCR + Microsoft Translator** | free tier: 2,000,000 chars/month (~1,300 pages) | yes — Microsoft free tier | Google's OCR boxes, Microsoft's translation quality, typeset locally |
 
 ### How many pages can you translate for free?
 
@@ -81,6 +82,10 @@ you want translated and press **Add this site** — that's it.
 - **Lens OCR + your own local AI: unlimited.** The detection and the OCR are
   Google's free anonymous endpoint; only the OCR'd *strings* are sent on, to a
   server you run yourself. Nothing is billed because nothing is metered.
+- **Lens OCR + Microsoft Translator:** the free (F0) tier includes
+  **2,000,000 characters/month — roughly 1,300 comic pages** — and renews
+  every month. When the allowance is spent the service stops until the next
+  month; nothing is billed unless you move the resource to a paid tier.
 - **Lens + Lara text:** Lara's free plan includes 60,000 characters/month, of
   which **10,000 are usable through the API**. A comic page is typically
   500–1,500 characters, so that is roughly **7–20 pages per month** free.
@@ -93,6 +98,40 @@ you want translated and press **Add this site** — that's it.
 The popup shows a live usage meter for the Lara engines (`Lara this month: X /
 10,000 chars`), and a quota rejection stops the run immediately instead of
 hammering the API for every image on the page.
+
+### Getting a Microsoft Translator key (free F0 tier)
+
+The `lens-azure` engine pairs free anonymous Lens OCR with Microsoft's
+documented Translator API. The free (F0) tier covers **2,000,000
+characters/month (~1,300 comic pages)**, renews monthly, and simply stops when
+spent — no bill unless you upgrade the resource.
+
+1. Go to the [Azure portal](https://portal.azure.com/) and sign in (a new
+   account needs an Azure subscription — the free account works).
+2. **Create a resource** → search **Translator** →
+   **Create**. Or create an **Azure AI services** multi-service resource —
+   either works.
+3. Pick a subscription, a resource group, and a **Region**. Any nearby region
+   works (e.g. `japaneast`, `westus2`); note the exact value — the extension
+   needs it verbatim.
+4. For **Pricing tier**, choose **Free F0** (2M chars/month). Finish creation
+   and wait for deployment.
+5. Open the resource → **Keys and Endpoint** (under *Resource Management*).
+   Copy **KEY 1** (either key works) and the **Location/Region**.
+   - Translator (single-service) resource: use the **Location** shown,
+     e.g. `japaneast`.
+   - Multi-service (Azure AI services) resource: use **`global`**.
+6. In this extension: Settings → Engine →
+   **Lens OCR + Microsoft Translator**, paste the key and region, then press
+   **Test Microsoft key**. The probe translates one character (`'a'` → `'es'`),
+   so it costs 1 character of the monthly allowance.
+7. Translate as usual. Only the OCR'd strings leave the browser — the image
+   itself goes to Google for OCR, never to Microsoft.
+
+If the test reports **401**, the key and region came from different resources
+or the region string is mistyped — re-copy both from the same **Keys and
+Endpoint** page. A spent allowance stops the run with a quota message until
+the next month.
 
 ### Running your own translation server
 

@@ -105,6 +105,20 @@ if (typeof globalThis.CTSettings === 'undefined') {
     /** Optional bearer token, sent only to the user's own URL above. */
     localTextApiKey: '',
 
+    /**
+     * Microsoft Translator (Azure AI Translator), used by the 'lens-azure'
+     * engine. Both halves are required - the key alone is not enough, and a
+     * missing/incorrect region is the most common setup mistake. Stored locally
+     * in browser.storage; requests are signed in the background page and sent
+     * directly to api.cognitive.microsofttranslator.com.
+     *
+     * The free (F0) tier is 2,000,000 characters per month, renewing monthly -
+     * roughly 1,300 manga pages, and nothing is billed unless the user moves
+     * the resource to a paid tier.
+     */
+    azureKey: '',
+    azureRegion: '',
+
     /** Text-removal model: overlay | inpainting | generative | generative_fast. */
     laraModel: 'inpainting',
 

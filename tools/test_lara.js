@@ -1026,7 +1026,19 @@ async function main() {
   print('lara: PASSED ' + passed + ', FAILED 0');
 }
 
-main().catch(function (e) {
+/**
+ * Report a driver failure AND make it visible to the shell.
+ *
+ * jsc exits 0 for a rejection that escapes an async driver - it only prints
+ * "Unhandled promise rejection" - so a failing assertion would scroll past and
+ * tools/verify.sh would still report the stage as passed. quit(1) puts the
+ * verdict in the exit code, which is what the stage actually checks; the
+ * rethrow keeps the same behaviour under node.
+ */
+function failDriver(e) {
   print('lara: test driver failed: ' + (e && e.message));
+  if (typeof quit === 'function') quit(1);
   throw e;
-});
+}
+
+main().catch(failDriver);

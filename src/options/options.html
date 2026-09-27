@@ -115,6 +115,34 @@
           <span id="lens-local-probe-result" class="muted small"></span>
         </p>
       </div>
+      <div id="azure-fields" hidden>
+        <div class="grid">
+          <label for="azureKey" data-i18n="options_azure_key">Microsoft Translator key</label>
+          <input type="password" id="azureKey" autocomplete="off"
+                 data-i18n-placeholder="options_azure_key_placeholder"
+                 placeholder="key 1 or key 2 from the resource">
+
+          <label for="azureRegion" data-i18n="options_azure_region">Resource region</label>
+          <input type="text" id="azureRegion" autocomplete="off"
+                 data-i18n-placeholder="options_azure_region_placeholder"
+                 placeholder="e.g. global, westus2, japaneast">
+        </div>
+        <p class="muted small" data-i18n-html="options_azure_help">
+          The free (F0) tier translates 2,000,000 characters a month — about
+          1,300 manga pages — and renews every month. When the allowance is spent
+          the service stops until the next month; nothing is billed unless you
+          move the resource to a paid tier. Google Lens still finds the text for
+          free, so only the detected strings are sent to Microsoft.
+          <strong>Both fields are required:</strong> copy the key and the region
+          from the resource's <em>Keys and Endpoint</em> page — use
+          <code>global</code> for a multi-service resource. A key paired with the
+          wrong region is the most common cause of a 401.
+        </p>
+        <p>
+          <button id="azure-probe" class="secondary" data-i18n="options_test_azure">Test Microsoft key</button>
+          <span id="azure-probe-result" class="muted small"></span>
+        </p>
+      </div>
     </section>
 
     <section>
