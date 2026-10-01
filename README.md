@@ -1,3 +1,8 @@
+> [!CAUTION]
+> This project has moved. It is now maintained as
+> **[comic-translate-4-free](https://github.com/jameslee0623/comic-translate-4-free)** —
+> please download the latest builds and report issues there. This repo is archived and will not receive updates.
+
 # ComicTranslate
 
 A browser extension for **Firefox and Chrome** that translates the text inside
