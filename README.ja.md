@@ -1,3 +1,8 @@
+> [!CAUTION]
+> This project has moved. It is now maintained as
+> **[comic-translate-4-free](https://github.com/jameslee0623/comic-translate-4-free)** —
+> please download the latest builds and report issues there. This repo is archived and will not receive updates.
+
 # ComicTranslate（日本語）
 
 **Firefox** と **Chrome** 向けのブラウザ拡張機能です。ページ内の画像・漫画・ウェブトゥーンの文字を検出し、OCR で読み取り、翻訳して元の文字を消し、吹き出しや枠の中に翻訳文を描画します。
