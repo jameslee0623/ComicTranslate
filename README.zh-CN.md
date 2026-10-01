@@ -1,3 +1,8 @@
+> [!CAUTION]
+> This project has moved. It is now maintained as
+> **[comic-translate-4-free](https://github.com/jameslee0623/comic-translate-4-free)** —
+> please download the latest builds and report issues there. This repo is archived and will not receive updates.
+
 # ComicTranslate（简体中文）
 
 一个适用于 **Firefox 和 Chrome** 的浏览器扩展，用于翻译图片、漫画和条漫中的文字。它会在页面中查找图片，识别文字，翻译后擦除原字，并将译文重新绘制到原来的位置。
