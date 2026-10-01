@@ -1,3 +1,8 @@
+> [!CAUTION]
+> This project has moved. It is now maintained as
+> **[comic-translate-4-free](https://github.com/jameslee0623/comic-translate-4-free)** —
+> please download the latest builds and report issues there. This repo is archived and will not receive updates.
+
 # ComicTranslate（한국어）
 
 **Firefox**와 **Chrome**을 위한 브라우저 확장 프로그램입니다. 페이지의 이미지, 만화, 웹툰에 있는 글자를 찾아 OCR로 읽고 번역한 뒤 원래 글자를 지우고 번역문을 같은 말풍선과 그림자에 다시 그립니다.
